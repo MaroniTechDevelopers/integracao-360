@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conferência Ponto × Movimentação × Trimble — Dedo Duro</title>
+<link rel="icon" id="favicon" type="image/png" href="">
+<style>
+  /* ============ TEMA (identidade Grupo Maroni — claro padrão, toggle p/ escuro) ============ */
+  :root{
+    --plane:#f0f2f5; --surface:#ffffff; --surface-2:#f4f5f7;
+    --ink:#111827; --ink-2:#374151; --muted:#6b7280;
+    --grid:#e5e7eb; --baseline:#d1d5db; --border:#e5e7eb;
+    --s1:#f5c800; --s2:#3b82f6; --s3:#10b981; --s4:#f59e0b; --s5:#8b5cf6; --s7:#ef4444;
+    --good:#10b981; --warning:#f59e0b; --serious:#f97316; --critical:#ef4444;
+    --good-ink:#059669; --crit-ink:#dc2626; --pend:#64748b; --pend-ink:#475569;
+    --navy:#111827; --gold:#f5c800; --gold-2:#e68a00;
+    --track-ponto:#f5c800; --track-mov:#3b82f6; --track-id-ok:#10b981; --track-id-bad:#ef4444;
+    --shadow:0 1px 2px rgba(17,24,39,.06),0 6px 22px rgba(17,24,39,.07);
+  }
+  :root[data-theme="dark"]{
+    --plane:#0e1626; --surface:#141d2e; --surface-2:#1b2637;
+    --ink:#f3f4f6; --ink-2:#c7cfda; --muted:#9aa4b2;
+    --grid:#26303f; --baseline:#3a4657; --border:rgba(255,255,255,0.09);
+    --s1:#f5c800; --s2:#60a5fa; --s3:#34d399; --s4:#fbbf24; --s5:#a78bfa; --s7:#f87171;
+    --good:#34d399; --warning:#fbbf24; --serious:#fb923c; --critical:#f87171;
+    --good-ink:#4ade80; --crit-ink:#f87171; --pend:#94a3b8; --pend-ink:#cbd5e1;
+    --track-ponto:#f5c800; --track-mov:#60a5fa; --track-id-ok:#34d399; --track-id-bad:#f87171;
+    --shadow:0 1px 3px rgba(0,0,0,.45),0 8px 26px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--plane); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{margin:0; font-weight:650; letter-spacing:-.01em}
+  a{color:var(--s2)}
+  .tnum{font-variant-numeric:tabular-nums}
+
+  /* ============ HEADER ============ */
+  header{
+    position:sticky; top:0; z-index:20; background:var(--navy); color:#e5e7eb;
+    border-bottom:3px solid var(--gold); padding:14px 22px 0;
+  }
+  .head-top{display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap}
+  .brand{display:flex; align-items:center; gap:13px; flex:1; min-width:260px}
+  .brand-logo{height:40px;width:auto;flex:none;display:block;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+  .brand h1{font-size:18px; color:#fff}
+  .brand .sub{color:#9aa4b2; font-size:12.5px; margin-top:2px}
+  .brand .sub b{color:var(--gold)}
+  .head-tools{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.14);
+    border-radius:9px; padding:7px 11px; font-size:12.5px; color:#c7cfda;
+  }
+  .pill b{color:#fff}
+  #dataModePill{background:color-mix(in srgb,var(--warning) 22%,transparent);border-color:transparent}
+  #dataModePill.real{background:color-mix(in srgb,var(--good) 28%,transparent)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 30%,transparent)}
+  select,.btn,input[type=text]{
+    font:inherit; font-size:12.5px; color:#f3f4f6;
+    background-color:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14);
+    border-radius:9px; padding:7px 11px; cursor:pointer;
+  }
+  input[type=text]{cursor:text}
+  select option{color:#111827}
+  select{appearance:none; -webkit-appearance:none; padding-right:30px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%239aa4b2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 11px center; background-size:11px 7px;}
+  .btn:hover,select:hover,input[type=text]:hover{border-color:rgba(255,255,255,.35)}
+  .btn.solid{background:var(--gold);color:#1a1a1a;border-color:transparent;font-weight:650}
+  .btn.solid:hover{background:#ffd521}
+  .field{display:flex;flex-direction:column;gap:3px}
+  .field label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#9aa4b2;padding-left:2px}
+
+  /* ============ TABS ============ */
+  nav.tabs{display:flex; gap:2px; margin-top:14px; overflow-x:auto}
+  nav.tabs button{
+    background:none;border:none;border-bottom:2px solid transparent;
+    color:#9aa4b2; font:inherit; font-size:13.5px; font-weight:550;
+    padding:10px 14px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px;
+  }
+  nav.tabs button .badge{font-size:11px;background:rgba(255,255,255,.1);color:#c7cfda;border-radius:20px;padding:1px 7px;border:1px solid rgba(255,255,255,.14)}
+  nav.tabs button:hover{color:#e5e7eb}
+  nav.tabs button.active{color:#fff; border-bottom-color:var(--gold)}
+  nav.tabs button.active .badge{background:color-mix(in srgb,var(--gold) 28%,transparent);color:#fff;border-color:transparent}
+
+  /* ============ LAYOUT ============ */
+  main{padding:18px 22px 60px; max-width:1400px; margin:0 auto}
+  section.view{display:none; animation:fade .25s ease}
+  section.view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .grid{display:grid; gap:14px}
+  .card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:16px; box-shadow:var(--shadow);
+  }
+  .card h3{font-size:13.5px}
+  .sec-title{display:flex;align-items:baseline;gap:10px;margin:20px 2px 10px}
+  .sec-title h2{font-size:15px}
+  .sec-title span{font-size:12px;color:var(--muted)}
+
+  /* ============ FILTER BAR ============ */
+  .filterbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px}
+  .filterbar .f{display:flex;flex-direction:column;gap:3px}
+  .filterbar .f label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding-left:2px}
+  .filterbar select,.filterbar input[type=text]{
+    color:var(--ink); background-color:var(--surface); border:1px solid var(--border);
+    box-shadow:var(--shadow);
+  }
+  .filterbar select:hover,.filterbar input[type=text]:hover{border-color:var(--gold)}
+  .filterbar select:focus,.filterbar input[type=text]:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 22%,transparent)}
+
+  /* ============ KPI ============ */
+  .kpis{grid-template-columns:repeat(6,1fr)}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{position:relative; overflow:hidden}
+  .kpi .lab{font-size:11.5px;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+  .kpi .val{font-size:29px;font-weight:680;letter-spacing:-.02em;margin:8px 0 2px;line-height:1}
+  .kpi .val small{font-size:14px;font-weight:600;color:var(--muted)}
+  .kpi .sub{font-size:11.5px;color:var(--muted)}
+  .kpi .accent{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:14px 0 0 14px}
+
+  /* ============ TIMELINE CARDS ============ */
+  .tl-card{padding:14px 16px 12px}
+  .tl-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+  .tl-head .who{display:flex;flex-direction:column;gap:1px;min-width:170px}
+  .tl-head .who b{font-size:14px}
+  .tl-head .who small{color:var(--muted);font-size:11.5px}
+  .tl-head .meta{display:flex;gap:14px;flex-wrap:wrap;margin-left:auto;font-size:12px}
+  .tl-head .meta .m b{font-variant-numeric:tabular-nums}
+  .tl-head .meta .m span{color:var(--muted);display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+  .status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:650;padding:4px 10px;border-radius:20px;white-space:nowrap}
+  .status .d{width:8px;height:8px;border-radius:50%}
+  .status.conforme{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good-ink)}
+  .status.conforme .d{background:var(--good)}
+  .status.atencao{background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--serious)}
+  .status.atencao .d{background:var(--warning)}
+  .status.critico{background:color-mix(in srgb,var(--critical) 16%,transparent);color:var(--crit-ink)}
+  .status.critico .d{background:var(--critical)}
+  .status.pendente{background:color-mix(in srgb,var(--pend) 20%,transparent);color:var(--pend-ink)}
+  .status.pendente .d{background:var(--pend)}
+
+  .ruler{position:relative;height:16px;margin:0 0 2px 92px}
+  .ruler .tick{position:absolute;top:0;transform:translateX(-50%);font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .ruler .tick i{position:absolute;top:14px;left:50%;width:1px;height:6px;background:var(--baseline)}
+  .track{display:flex;align-items:center;gap:8px;margin:5px 0}
+  .track .tlab{width:84px;flex:none;text-align:right;font-size:11px;color:var(--muted);font-weight:600}
+  .track .lane{position:relative;flex:1;height:20px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+  .lane .gl{position:absolute;top:0;bottom:0;width:1px;background:var(--grid)}
+  .seg{position:absolute;top:2px;bottom:2px;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;font-size:10px;font-weight:600;color:#fff;padding:0 5px;min-width:2px}
+  .seg.ponto{background:color-mix(in srgb,var(--track-ponto) 82%,#000 4%);color:#3a2e00}
+  .seg.mov{background:var(--track-mov)}
+  .seg.idok{background:var(--track-id-ok)}
+  .seg.idbad{background:var(--track-id-bad)}
+  .seg.fora{outline:2px dashed var(--serious);outline-offset:-2px}
+  .seg.almoco{background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 4px,color-mix(in srgb,var(--critical) 60%,#000) 4px,color-mix(in srgb,var(--critical) 60%,#000) 8px);color:#fff}
+  .lane-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--muted);font-style:italic;letter-spacing:.02em}
+  .flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .flag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:4px 9px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)}
+  .flag .fi{width:7px;height:7px;border-radius:50%}
+  .flag.critico{border-color:color-mix(in srgb,var(--critical) 45%,var(--border))}
+  .flag.critico .fi{background:var(--critical)}
+  .flag.atencao .fi{background:var(--warning)}
+  .flag.pendente{border-color:color-mix(in srgb,var(--pend) 45%,var(--border))}
+  .flag.pendente .fi{background:var(--pend)}
+  .flag.info .fi{background:var(--s2)}
+
+  /* legend */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);align-items:center}
+  .legend .lg{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:14px;height:10px;border-radius:3px}
+
+  /* ============ TABLE ============ */
+  .tblwrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:820px}
+  thead th{background:var(--surface-2);text-align:left;padding:9px 11px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);position:sticky;top:0;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap}
+  tbody td{padding:8px 11px;border-bottom:1px solid var(--border);white-space:nowrap}
+  tbody tr:hover{background:var(--surface-2)}
+  td .chip{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+  td .chip.conforme{background:color-mix(in srgb,var(--good) 15%,transparent);color:var(--good-ink)}
+  td .chip.atencao{background:color-mix(in srgb,var(--warning) 20%,transparent);color:var(--serious)}
+  td .chip.critico{background:color-mix(in srgb,var(--critical) 16%,transparent);color:var(--crit-ink)}
+  td .chip.pendente{background:color-mix(in srgb,var(--pend) 20%,transparent);color:var(--pend-ink)}
+  .badcell{color:var(--crit-ink);font-weight:650}
+  .pendcell{color:var(--pend-ink);font-style:italic}
+
+  /* ============ RESUMO SEMANAL (por operação + farol) ============ */
+  .op-block{padding:0;overflow:hidden;margin-bottom:14px}
+  .op-block .op-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+  .op-block .op-head h3{font-size:14.5px}
+  .op-block .op-kpi{font-size:12.5px;color:var(--muted)}
+  .op-block .op-kpi span{color:var(--serious);font-weight:700;font-size:14px}
+  .op-block .op-kpi b{color:var(--ink)}
+  .op-block .tblwrap{border:none;border-radius:0}
+  .op-block table{min-width:640px}
+  .farol-strip{display:inline-flex;gap:5px;align-items:center}
+  .fdot{width:14px;height:14px;border-radius:50%;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+  .fdot.sm{width:11px;height:11px}
+
+  /* ============ CAPINHAS (cards clicáveis do motorista) ============ */
+  .capgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:12px;padding:14px 16px}
+  .capinha{text-align:left;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 13px;cursor:pointer;display:flex;flex-direction:column;gap:10px;transition:transform .12s,box-shadow .12s,border-color .12s}
+  .capinha:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--gold)}
+  .capinha:focus-visible{outline:2px solid var(--s2);outline-offset:2px}
+  .cap-top{display:flex;align-items:center;gap:10px}
+  .avatar{width:38px;height:38px;border-radius:10px;flex:none;display:grid;place-items:center;color:#1a1a1a;font-weight:750;font-size:13px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+  .cap-id{flex:1;min-width:0}
+  .cap-id b{font-size:13.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cap-id small{color:var(--muted);font-size:11px}
+  .cap-metrics{display:flex;gap:8px}
+  .cap-metrics .cm{flex:1;background:var(--surface-2);border-radius:8px;padding:6px 8px;text-align:center}
+  .cap-metrics .cm span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .cap-metrics .cm b{font-size:15px;font-variant-numeric:tabular-nums}
+  .cap-metrics .cm b.ok{color:var(--good-ink)} .cap-metrics .cm b.bad{color:var(--crit-ink)}
+  .cap-foot{display:flex;flex-direction:column;gap:8px}
+  .cap-alerts{display:inline-flex;gap:4px;flex-wrap:wrap}
+  /* farol agrupado por mês */
+  .farol-months{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .fmes{display:inline-flex;flex-direction:column;gap:3px}
+  .fmes-lab{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center}
+  .fmes-dots{display:inline-flex;gap:4px;justify-content:center;padding-top:4px;border-top:1px solid var(--border)}
+  .fweek{display:inline-flex;flex-direction:column;align-items:center;gap:3px}
+  .fwk-lab{color:var(--muted);font-size:9.5px}
+  .fwk-h{color:var(--ink-2);font-variant-numeric:tabular-nums;font-size:10.5px;font-weight:600}
+  .abadge{font-size:10.5px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:1px 5px;color:var(--ink-2)}
+  .abadge.ok{color:var(--good-ink)}
+  .abadge.hot{color:var(--crit-ink);font-weight:600;border-color:color-mix(in srgb,var(--critical) 45%,var(--border))}
+  .abadge.pend{color:var(--pend-ink);font-weight:600;border-color:color-mix(in srgb,var(--pend) 45%,var(--border));background:color-mix(in srgb,var(--pend) 14%,transparent)}
+  .cap-cta{font-size:11px;color:var(--muted);font-weight:600}
+  .capinha:hover .cap-cta{color:var(--gold-2)}
+
+  /* ============ FICHA DO MOTORISTA (detalhamento) ============ */
+  .ficha-back{display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px}
+  .ficha-back:hover{border-color:var(--gold)}
+  .ficha-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .ficha-hero .avatar{width:60px;height:60px;border-radius:14px;font-size:20px}
+  .ficha-hero h2{font-size:20px}
+  .ficha-hero .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .ficha-hero .reco{margin-left:auto;max-width:360px;font-size:12.5px;padding:10px 12px;border-radius:10px;border:1px solid var(--border)}
+  .ficha-hero .reco b{display:block;margin-bottom:2px}
+  .reco.manter{background:color-mix(in srgb,var(--good) 12%,transparent);border-color:color-mix(in srgb,var(--good) 40%,var(--border))}
+  .reco.questionar{background:color-mix(in srgb,var(--critical) 12%,transparent);border-color:color-mix(in srgb,var(--critical) 40%,var(--border))}
+  .reco.observar{background:color-mix(in srgb,var(--warning) 14%,transparent);border-color:color-mix(in srgb,var(--warning) 45%,var(--border))}
+  .alert-row{display:flex;gap:10px;flex-wrap:wrap}
+  .alert-tile{flex:1;min-width:110px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center}
+  .alert-tile .n{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .alert-tile.hot .n{color:var(--crit-ink)}
+  .alert-tile .l{font-size:11px;color:var(--muted);margin-top:2px}
+
+  /* ============ IMPORT / DADOS ============ */
+  .drops{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .drops.drops-2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:900px){.drops,.drops.drops-2{grid-template-columns:1fr}}
+  .drop{border:1.5px dashed var(--border);border-radius:12px;padding:16px;background:var(--surface-2);position:relative}
+  .drop h3{display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:4px}
+  .drop .num{width:22px;height:22px;border-radius:50%;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+  .drop p{font-size:12px;color:var(--muted);margin:6px 0 10px}
+  .drop .status-line{font-size:12px;margin-top:8px;font-weight:600}
+  .drop.loaded{border-style:solid;border-color:color-mix(in srgb,var(--good) 55%,var(--border))}
+  .drop.loaded .status-line{color:var(--good-ink)}
+  .drop code{background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:11px}
+  .cfg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+  .cfg .cf label{font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+  .cfg .cf input{width:100%;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font:inherit;cursor:text}
+  .docs{font-size:13px;line-height:1.6}
+  .docs h4{margin:16px 0 6px;font-size:13.5px}
+  .docs ul{margin:6px 0;padding-left:20px}
+  .docs code{background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:12px}
+  .empty{text-align:center;color:var(--muted);padding:50px 20px;font-size:13.5px}
+
+  /* toast */
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;transition:.25s;background:var(--navy);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:50;pointer-events:none;border-left:3px solid var(--gold)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .footer img{height:18px;opacity:.7}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-top">
+    <div class="brand">
+      <img class="brand-logo" id="brandLogo" alt="Grupo Maroni" src="">
+      <div>
+        <h1>Conferência de Jornada — Ponto × Movimentação × Trimble</h1>
+        <div class="sub">Projeto <b>Dedo Duro</b> · cruzamento folha de ponto × movimentação do veículo × identificação facial</div>
+      </div>
+    </div>
+    <div class="head-tools">
+      <span class="pill" id="dataModePill"><span class="dot"></span> <b id="dataModeTxt">dados de demonstração</b></span>
+      <button class="btn" id="themeBtn" title="Alternar tema">🌗 Tema</button>
+      <button class="btn" id="printBtn" title="Imprimir / PDF">🖨️ PDF</button>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="semana" class="active">Resumo semanal</button>
+    <button data-tab="linha">Linha do tempo</button>
+    <button data-tab="diverg">Divergências <span class="badge" id="badgeDiv">0</span></button>
+    <button data-tab="tabela">Consolidado</button>
+    <button data-tab="dados">Dados &amp; como usar</button>
+  </nav>
+</header>
+
+<main>
+  <!-- FILTER BAR (compartilhada) -->
+  <div class="filterbar" id="filterbar">
+    <div class="f"><label>Operação</label><select id="fOp"><option value="">Todas</option></select></div>
+    <div class="f"><label>Dia</label><select id="fDia"><option value="">Todos</option></select></div>
+    <div class="f"><label>Motorista</label><select id="fMot"><option value="">Todos</option></select></div>
+    <div class="f"><label>Situação</label><select id="fStatus">
+      <option value="">Todas</option>
+      <option value="critico">Crítico</option>
+      <option value="atencao">Atenção</option>
+      <option value="pendente">Pendência</option>
+      <option value="conforme">Conforme</option>
+    </select></div>
+    <div class="f" style="flex:1;min-width:170px"><label>Busca (nome / placa)</label><input type="text" id="fBusca" placeholder="Filtrar…"></div>
+    <button class="btn" id="clearFilters" style="color:var(--ink);background:var(--surface);border-color:var(--border)">Limpar</button>
+  </div>
+
+  <!-- ===== RESUMO SEMANAL (CAPIVARA) ===== -->
+  <section class="view active" id="view-semana">
+    <div class="grid kpis" id="kpis"></div>
+    <div class="sec-title"><h2>Resumo semanal — Dedo Duro</h2><span>horas de movimento fora do ponto, por operação · farol por motorista/semana</span>
+      <button class="btn" id="expSemana" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
+    <div class="card" style="padding:11px 16px;margin-bottom:12px">
+      <div class="legend">
+        <span class="lg"><span class="sw" style="background:var(--good)"></span> Verde — sem horas dedo duro</span>
+        <span class="lg"><span class="sw" style="background:var(--warning)"></span> Amarelo — até o limite</span>
+        <span class="lg"><span class="sw" style="background:var(--critical)"></span> Vermelho — acima do limite</span>
+        <span class="lg" style="margin-left:auto;color:var(--muted)">limite do farol ajustável na aba Dados</span>
+      </div>
+    </div>
+    <div id="semanaBox"></div>
+  </section>
+
+  <!-- ===== FICHA DO MOTORISTA (detalhamento — abre ao clicar numa capinha) ===== -->
+  <section class="view" id="view-ficha">
+    <button class="ficha-back" id="fichaBack">← Voltar ao resumo</button>
+    <div id="fichaBox"></div>
+  </section>
+
+  <!-- ===== LINHA DO TEMPO ===== -->
+  <section class="view" id="view-linha">
+    <div class="sec-title"><h2>Linha do tempo por motorista/dia</h2><span>a evidência: as três fontes sobrepostas na mesma escala de horas</span></div>
+    <div class="card" style="padding:12px 16px">
+      <div class="legend">
+        <span class="lg"><span class="sw" style="background:var(--track-ponto)"></span> Folha de ponto (jornada)</span>
+        <span class="lg"><span class="sw" style="background:var(--track-mov)"></span> Movimentação do veículo</span>
+        <span class="lg"><span class="sw" style="background:var(--track-id-ok)"></span> Trimble — motorista confere</span>
+        <span class="lg"><span class="sw" style="background:var(--track-id-bad)"></span> Trimble — motorista divergente</span>
+        <span class="lg"><span class="sw" style="background:transparent;outline:2px dashed var(--serious);outline-offset:-2px"></span> dedo duro (fora do ponto)</span>
+        <span class="lg"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 3px,#0000 3px,#0000 6px)"></span> dirigiu no almoço</span>
+      </div>
+    </div>
+    <div class="grid" id="timelines" style="margin-top:12px"></div>
+  </section>
+
+  <!-- ===== DIVERGÊNCIAS ===== -->
+  <section class="view" id="view-diverg">
+    <div class="sec-title"><h2>Divergências detectadas</h2><span id="divCount"></span></div>
+    <div class="grid" id="divList"></div>
+  </section>
+
+  <!-- ===== CONSOLIDADO ===== -->
+  <section class="view" id="view-tabela">
+    <div class="sec-title"><h2>Consolidado</h2><span>clique no cabeçalho para ordenar · exporte em CSV</span>
+      <button class="btn" id="expCsv" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
+    <div class="tblwrap"><table id="tbl">
+      <thead><tr>
+        <th data-k="operacao">Operação</th>
+        <th data-k="data">Dia</th>
+        <th data-k="motoristaEscala">Motorista</th>
+        <th data-k="placa">Veículo(s)</th>
+        <th data-k="entrada">Ponto</th>
+        <th data-k="horasPonto">h ponto</th>
+        <th data-k="primMov">Direção</th>
+        <th data-k="horasMov">h direção</th>
+        <th data-k="horasDedoDuro">Dedo duro</th>
+        <th data-k="_sev">Situação</th>
+      </tr></thead>
+      <tbody id="tblBody"></tbody>
+    </table></div>
+  </section>
+
+  <!-- ===== DADOS ===== -->
+  <section class="view" id="view-dados">
+    <div class="sec-title"><h2>Carregar os relatórios</h2><span>cruza por motorista + dia · CSV/Excel · fica neste navegador</span></div>
+    <div class="drops drops-3">
+      <div class="drop" id="drop-ponto">
+        <h3><span class="num">1</span> Jornada (ponto)</h3>
+        <p>Espelho de ponto. Colunas: <code>Nome do funcionário</code>, <code>Nome do departamento</code> (operação), <code>Dia</code>, <code>Entrada 1…6</code> / <code>Saída 1…6</code>.</p>
+        <input type="file" id="filePonto" accept=".csv,.xlsx,.xls,.txt" hidden>
+        <button class="btn solid" onclick="document.getElementById('filePonto').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stPonto">nenhum arquivo — usando demonstração</div>
+      </div>
+      <div class="drop" id="drop-mov">
+        <h3><span class="num">2</span> Movimentação + Identificação (Trimble)</h3>
+        <p>Histórico do veículo com o condutor identificado. Colunas: <code>Veículo</code>, <code>Ocorrência</code>, <code>Data/Hora inicial</code> / <code>final</code>, <code>Motorista</code>, <code>Distância</code>.</p>
+        <input type="file" id="fileMov" accept=".csv,.xlsx,.xls,.txt" hidden>
+        <button class="btn solid" onclick="document.getElementById('fileMov').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stMov">nenhum arquivo — usando demonstração</div>
+      </div>
+      <div class="drop" id="drop-alertas">
+        <h3><span class="num">3</span> Alertas (Trimble) <span style="font-size:11px;color:var(--muted);font-weight:400">opcional</span></h3>
+        <p>Histórico de alertas. Colunas: <code>Motorista</code>, <code>Tipo</code>, <code>Nível</code>, <code>UO</code>, <code>Data</code>. Aceita <code>.zip</code> ou <code>.csv</code> — só conta (não guarda as linhas).</p>
+        <input type="file" id="fileAlertas" accept=".zip,.csv,.txt" hidden>
+        <button class="btn solid" onclick="document.getElementById('fileAlertas').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stAlertas">nenhum arquivo</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn" id="recalc" style="color:var(--ink);background:var(--surface);border-color:var(--border)">↻ Reprocessar</button>
+      <button class="btn" id="resetDemo" style="color:var(--ink);background:var(--surface);border-color:var(--border)">Voltar à demonstração</button>
+      <button class="btn" id="clearData" style="color:var(--crit-ink);background:var(--surface);border-color:var(--border)">Limpar bases salvas</button>
+    </div>
+
+    <div class="sec-title"><h2>Regras de conferência</h2><span>ajuste as tolerâncias — recalcula na hora</span></div>
+    <div class="card">
+      <div class="cfg">
+        <div class="cf"><label>Tolerância de alinhamento (min)</label><input type="number" id="cfgTol" value="20" min="0"></div>
+        <div class="cf"><label>Semelhança facial mínima (%)</label><input type="number" id="cfgSem" value="80" min="0" max="100"></div>
+        <div class="cf"><label>Dedo duro a partir de (min)</label><input type="number" id="cfgFora" value="15" min="0"></div>
+        <div class="cf"><label>Movimento mínimo p/ considerar (min)</label><input type="number" id="cfgMovMin" value="5" min="0"></div>
+        <div class="cf"><label>Farol amarelo até (min de dedo duro/semana)</label><input type="number" id="cfgFarol" value="60" min="0"></div>
+        <div class="cf"><label>Meta de média (km/l)</label><input type="number" id="cfgMeta" value="2.40" min="0" step="0.01"></div>
+        <div class="cf"><label>Almoço mínimo — pausa válida (min)</label><input type="number" id="cfgAlmoco" value="30" min="0"></div>
+        <div class="cf"><label>Exige pausa acima de (h de jornada)</label><input type="number" id="cfgJornada" value="6" min="0" step="0.5"></div>
+      </div>
+    </div>
+
+    <div class="sec-title"><h2>Como funciona</h2></div>
+    <div class="card docs">
+      <p>O painel cruza <b>três fontes independentes</b> por <b>motorista + dia</b> e aponta onde elas não batem —
+         a base do <b>Dedo Duro</b>: garantir que quem bateu ponto é quem realmente dirigiu o veículo, nos horários certos.</p>
+      <h4>O que cada situação significa</h4>
+      <ul>
+        <li><b style="color:var(--crit-ink)">Identificação divergente</b> — a câmera Trimble reconheceu um motorista <b>diferente</b> do escalado na folha. É o achado central.</li>
+        <li><b style="color:var(--crit-ink)">Movimento sem ponto</b> — o veículo rodou mas não há batida de ponto no dia (trabalho não registrado ou terceiro dirigindo).</li>
+        <li><b style="color:var(--serious)">Deslocamento fora da jornada</b> — veículo em movimento antes da entrada ou depois da saída registrada (as <b>horas dedo duro</b>).</li>
+        <li><b style="color:var(--serious)">Marcou almoço mas conduziu na pausa</b> — há intervalo de almoço no ponto, mas o veículo se moveu dentro dele (não fez a pausa de verdade).</li>
+        <li><b style="color:var(--serious)">Jornada sem intervalo de almoço</b> — seguiu direto: jornada longa sem nenhuma pausa registrada no ponto.</li>
+        <li><b style="color:var(--serious)">Semelhança facial baixa</b> — a identificação existe, mas abaixo do limite de confiança.</li>
+        <li><b style="color:var(--pend-ink)">Pendência</b> — falta dado para conferir: <b>movimentação não encontrada</b> e/ou <b>identificação Trimble não encontrada</b> para o dia. Não é "confere" — é investigar (câmera obstruída/sem cadastro, relatório incompleto).</li>
+      </ul>
+      <h4>Plugar as bases reais</h4>
+      <ul>
+        <li>Folha de ponto: o próprio export do relógio já serve (ver <code>exemplo-ponto-controlid.csv</code> nesta pasta).</li>
+        <li>Movimentação: sai do <code>coletor-trimble.py</code> / <code>bi.fato_conducao</code> — ajuste as colunas para <code>Placa, Motorista, Data, Início, Fim, Km</code>.</li>
+        <li>Identificação: o <b>Relatório de Identificação</b> da Trimble (facial) — traz motorista reconhecido e % de semelhança.</li>
+        <li>Datas aceitam <code>dd/mm/aaaa</code> ou <code>aaaa-mm-dd</code>; horas <code>HH:MM</code> ou <code>dd/mm/aaaa HH:MM</code>.</li>
+      </ul>
+      <p style="color:var(--muted)">As bases carregadas ficam só neste navegador (localStorage). Nada é enviado para fora.</p>
+    </div>
+  </section>
+
+  <div class="footer">
+    <img id="footLogo" alt="" src="">
+    <span>Grupo Maroni · Projeto Dedo Duro — Identificação de Condutor &amp; Média (Trimble)</span>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<!-- SheetJS (para .xlsx) e JSZip (para o .zip de alertas). CSV funciona sem internet. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+/* ============================================================
+   LOGO MARONI (rinoceronte) — embutido
+   ============================================================ */
+const LOGO_MARONI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADcAAAA7CAYAAADfGRI9AAADxUlEQVR42u3abYgUdRzA8d9sd212HgV5RRrVFcZpDxpkUeBhLzToisI6RAkCPZKIK4IMi4gKzvJ60VUvghKE6AGl7IJ60dWBcVmClYJ6Hp6Ij6d4x6msck+6P78v5mD5cbe7/nfmZubYF59ll2Fm98vu/Oc/syPDZ+oFzQm3GGKNP9GEayvHJVTRcSdwZ8y95Bp3BBJzz5bjynHxU44rxwXgmuka9xR2Tbe4BeiEYnC6xM3GZmRzt5n0uCq8j4tQoyepcSmsQd8kUYo9SY1bBjUG8CTWQtGV1DgP+6G+P3EbBM9D0QlxdDOWRhLnWw1FBtUQXz0U7Y5hj+EkdkUZV4sxKFogvvlQ9OJVLEENpAivYRTqmzfVcTPwrhkhR1AHwS1QWP3Yjs/wgpnBzMQWqLFhquI8rMQxKKzfIaiAFmE3HsE8dENhHUUq7LiH8Te0gEYIBosMzGIImseisOLm4GtokY6jCgehJTiFjagL/Gdp96urtBH/OKw3hm14GhVhHOc8rMBRqKMxh2+uHzVhHsQfwl/QiCwtEHcDFuaYY5ancddEcRlkoRHqsEH2gxeI/wp3x/mK8wIIrDYsgUxiDRQ3xjnu+zz72kIIrEUYxgV4woMXk5iJrIf4bscgdJKf5aycwW/H+ICSiklIvsBKc0iZBXsB6g+o7/OkxCl2mtfXmriPzPLVSYrLNWzClkONByFR7HN70YxPoA76Ib46ZMzyEVRGFXceaQhaHNY/AkE1uqHG/3aGcmmKA9chBQ+HHNZ/Cz9AYW0ycSXN3HdAHXRjLX6CBugVG/cz1EEW92A0JoON4lEb9zbUwQAErTEJu4wqG1cPdXAQgpnogUasG2LjKnDOYWMXUQfB/RiKOO5bGzducwnHrRkQNEUc98ZkcYuhjjZBfN9EGNds43L9C3W0Mgb736f54hqgjjKYC8GteA/HoQH5D+3QPH61cVYH1NEeXGdORRrQHsAsqBVi5pJWb6G42vENOOpDC+wJ5Wy8g8OlBBa4GncJlTbOWgUtURYdaDTnXyksw48hzGxGcZOJm9CH0ICcQSvmwv739iYOhT1aWh6+gAZsO1Yhbd7rcXyHEaiDLRAbVyhwAzQEA2jDfNgLPV9Cr0IPqouNs1YgAw1JF17E9ebmnNNFTgHvgzjF+e7AL9AQncXL8CCowbaciD4cwE78hq1YDnGNs57B7pDievEcxKiAFOAcZ3l+ZGdA/yvsQxMqIUEJYiO1WIcujEGLNISteAIeBBK3uFxp3IsGNGE9WvAxPsDraMQDSId9X+YVeZsPNYw7FOMAAAAASUVORK5CYII=";
+document.getElementById('favicon').href = LOGO_MARONI;
+document.getElementById('brandLogo').src = LOGO_MARONI;
+document.getElementById('footLogo').src = LOGO_MARONI;
+
+/* ============================================================
+   UTILIDADES
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const LS = { data:'ddPMT_data', cfg:'ddPMT_cfg', theme:'ddPMT_theme' };
+
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
+function norm(s){ return (s==null?'':String(s)).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toUpperCase().replace(/\s+/g,' '); }
+function toMin(hhmm){ if(hhmm==null) return null; const m=String(hhmm).match(/(\d{1,2}):(\d{2})/); if(!m) return null; return (+m[1])*60+(+m[2]); }
+function hm(min){ if(min==null||isNaN(min)) return '—'; min=Math.round(min); const h=Math.floor(min/60), m=min%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
+function hDec(min){ if(min==null||isNaN(min)) return '—'; return (min/60).toFixed(1).replace('.',',')+'h'; }
+function isoDate(s){ if(!s) return ''; s=String(s).trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(m){ let y=m[3].length===2?'20'+m[3]:m[3]; return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; }
+  return s; }
+function brDate(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:iso; }
+function firstName(n){ return String(n||'').trim().split(/\s+/).slice(0,2).join(' '); }
+// nº da semana ISO (ex.: "S37") — usado no rollup semanal "Capivara"
+function isoWeek(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return ''; const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3])); const day=(d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-day+3); const t=d.getTime(); d.setUTCMonth(0,1); if(d.getUTCDay()!==4) d.setUTCMonth(0,1+((4-d.getUTCDay())+7)%7); const w=1+Math.round((t-d.getTime())/6048e5); return 'S'+String(w).padStart(2,'0'); }
+// farol do dedo duro por horas (min): verde=sem horas · amarelo=até limite · vermelho=acima
+function farol(min){ if(min<=0) return 'verde'; if(min<=CFG.farolAmareloMax) return 'amarelo'; return 'vermelho'; }
+const FAROL_COR={verde:'var(--good)',amarelo:'var(--warning)',vermelho:'var(--critical)'};
+const SEV_LABEL={conforme:'Conforme',atencao:'Atenção',critico:'Crítico',pendente:'Pendência'};
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+// info da semana ISO: chave ordenável (segunda), rótulo (S37) e o mês a que pertence (quinta da semana)
+function weekInfo(iso){
+  const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return {key:'',label:'',mesKey:'',mesLabel:''};
+  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3])); const day=(d.getUTCDay()+6)%7;
+  const thu=new Date(d); thu.setUTCDate(d.getUTCDate()-day+3);   // quinta-feira da semana ISO
+  const mon=new Date(thu); mon.setUTCDate(thu.getUTCDate()-3);   // segunda-feira
+  return { key:mon.toISOString().slice(0,10), label:isoWeek(iso),
+           mesKey:thu.getUTCFullYear()+'-'+String(thu.getUTCMonth()+1).padStart(2,'0'),
+           mesLabel:MESES[thu.getUTCMonth()]+'/'+String(thu.getUTCFullYear()).slice(2) };
+}
+// faixa de farol agrupada por mês (cada mês com suas semanas)
+function farolStripHTML(semanas, weeks, opts){
+  opts=opts||{}; const meses=[], byMes={};
+  weeks.forEach(w=>{ if(!byMes[w.mesKey]){byMes[w.mesKey]={mesLabel:w.mesLabel,weeks:[]};meses.push(w.mesKey);} byMes[w.mesKey].weeks.push(w); });
+  return '<div class="farol-months">'+meses.map(mk=>{
+    const g=byMes[mk];
+    const dots=g.weeks.map(w=>{ const has=(w.key in semanas); const cor=has?FAROL_COR[farol(semanas[w.key])]:'var(--baseline)';
+      const hrs=has?hDec(semanas[w.key]):'sem dado';
+      if(opts.showHours) return `<span class="fweek"><span class="fdot" style="background:${cor}" title="${w.label}: ${hrs}"></span><span class="fwk-lab">${w.label}</span><span class="fwk-h">${has?hDec(semanas[w.key]):'—'}</span></span>`;
+      return `<span class="fdot ${opts.size==='sm'?'sm':''}" style="background:${cor}" title="${w.label} · ${g.mesLabel}: ${hrs}"></span>`;
+    }).join('');
+    return `<span class="fmes"><span class="fmes-lab">${g.mesLabel}</span><span class="fmes-dots">${dots}</span></span>`;
+  }).join('')+'</div>';
+}
+
+/* ============================================================
+   DADOS DE DEMONSTRAÇÃO (contam uma história de conferência)
+   ============================================================ */
+function demoRecords(){
+  return [
+    { operacao:'Unilever', data:'2026-09-10', placa:'RQK4C21', motoristaEscala:'José da Conceição',
+      ponto:['07:02','11:58','13:05','17:10'],
+      movimento:[{ini:'07:20',fim:'11:40',km:112},{ini:'13:20',fim:'16:50',km:98}],
+      trimble:{ segs:[{ini:'07:22',fim:'11:38',motorista:'José da Conceição',semelhanca:94},{ini:'13:24',fim:'16:48',motorista:'José da Conceição',semelhanca:92}] } },
+
+    { operacao:'Unilever', data:'2026-09-10', placa:'RQK4C22', motoristaEscala:'Maria Souza',
+      ponto:['08:00','16:30'],
+      movimento:[{ini:'08:10',fim:'16:10',km:187}],
+      trimble:{ segs:[{ini:'08:15',fim:'16:05',motorista:'Carlos Pereira',semelhanca:88}] } },
+
+    { operacao:'Unilever', data:'2026-09-10', placa:'RQK4C23', motoristaEscala:'Antônio Ribeiro',
+      ponto:['06:30','15:45'],
+      movimento:[{ini:'06:50',fim:'15:20',km:143},{ini:'16:20',fim:'18:40',km:76}],
+      trimble:{ segs:[{ini:'06:52',fim:'15:18',motorista:'Antônio Ribeiro',semelhanca:58},{ini:'16:22',fim:'18:38',motorista:'Antônio Ribeiro',semelhanca:61}] } },
+
+    { operacao:'Baú', data:'2026-09-10', placa:'FTZ2A88', motoristaEscala:'Rafael Nunes',
+      ponto:[],
+      movimento:[{ini:'05:40',fim:'13:10',km:206}],
+      trimble:{ segs:[{ini:'05:44',fim:'13:06',motorista:'Rafael Nunes',semelhanca:90}] } },
+
+    { operacao:'Bitrem', data:'2026-09-10', placa:'FTZ2A90', motoristaEscala:'Paulo Henrique',
+      ponto:['07:15','12:00','13:00','17:00'],
+      movimento:[],
+      trimble:{ segs:[] } },
+
+    { operacao:'Unilever', data:'2026-09-11', placa:'RQK4C21', motoristaEscala:'José da Conceição',
+      ponto:['07:05','11:50','12:55','17:02'],
+      movimento:[{ini:'07:18',fim:'11:45',km:120},{ini:'13:05',fim:'16:55',km:101}],
+      trimble:{ segs:[{ini:'07:20',fim:'11:43',motorista:'José da Conceição',semelhanca:95},{ini:'13:07',fim:'16:52',motorista:'José da Conceição',semelhanca:93}] } },
+
+    { operacao:'Unilever', data:'2026-09-11', placa:'RQK4C22', motoristaEscala:'Maria Souza',
+      ponto:['07:58','16:35'],
+      movimento:[{ini:'08:05',fim:'16:20',km:190}],
+      trimble:{ segs:[{ini:'08:08',fim:'16:18',motorista:'Maria Souza',semelhanca:91}] } },
+
+    { operacao:'Baú', data:'2026-09-11', placa:'FTZ2A88', motoristaEscala:'Rafael Nunes',
+      ponto:['05:30','14:00'],
+      movimento:[{ini:'05:45',fim:'13:40',km:198}],
+      trimble:{ segs:[{ini:'05:48',fim:'13:36',motorista:'Rafael Nunes',semelhanca:64}] } },
+
+    // marcou almoço (12:00–13:00) mas dirigiu na pausa (12:15–12:50) → "conduziu sem a pausa"
+    { operacao:'Bitrem', data:'2026-09-11', placa:'FTZ2B01', motoristaEscala:'Sandro Lima',
+      ponto:['06:00','12:00','13:00','16:20'],
+      movimento:[{ini:'06:15',fim:'11:55',km:180},{ini:'12:15',fim:'12:50',km:22},{ini:'13:05',fim:'16:10',km:120}],
+      trimble:{ segs:[{ini:'06:17',fim:'11:53',motorista:'Sandro Lima',semelhanca:89},{ini:'12:16',fim:'12:49',motorista:'Sandro Lima',semelhanca:87},{ini:'13:07',fim:'16:08',motorista:'Sandro Lima',semelhanca:90}] } },
+
+    // ---- histórico de semanas anteriores (p/ o farol semanal evoluir) ----
+    ...histDemo('Unilever','RQK4C21','José da Conceição',[
+      ['2026-08-19','07:00','17:00','07:15','16:45'], ['2026-08-26','07:00','17:00','07:10','16:50'], ['2026-09-02','07:00','17:00','07:10','17:40'] ]),
+    ...histDemo('Unilever','RQK4C22','Maria Souza',[
+      ['2026-08-19','08:00','16:30','08:10','16:10'], ['2026-08-26','08:00','16:30','08:05','16:20'], ['2026-09-02','08:00','16:30','08:05','16:15'] ]),
+    ...histDemo('Baú','FTZ2A88','Rafael Nunes',[
+      ['2026-08-19','05:30','14:00','05:45','13:40'], ['2026-08-26','05:30','14:00','05:45','15:40'], ['2026-09-02','06:00','14:00','05:00','16:30'] ]),
+  ];
+}
+// gera registros simples de histórico (1 jornada + 1 janela de movimento) p/ o rollup semanal
+function histDemo(op,placa,mot,dias){
+  return dias.map(([data,pe,ps,mi,mf])=>({
+    operacao:op, data, placa, motoristaEscala:mot,
+    ponto:[pe,ps], movimento:[{ini:mi,fim:mf,km:120}],
+    trimble:{ segs:[{ini:mi,fim:mf,motorista:mot,semelhanca:90}] }
+  }));
+}
+
+/* ============================================================
+   CADASTRO DE MOTORISTAS (ficha/5º indicador) — demonstração
+   Na base real: admissão vem do TMS/CTMS · média vem do Marcante ·
+   alertas vêm da Trimble (celular, cinto, fadiga, distração, velocidade)
+   ============================================================ */
+const DRIVERS = {
+  'José da Conceição': {admissao:'2021-03-15', media:2.55, alertas:{celular:1,cinto:0,fadiga:0,distracao:2,velocidade:1}},
+  'Maria Souza':       {admissao:'2023-08-01', media:2.42, alertas:{celular:0,cinto:1,fadiga:1,distracao:0,velocidade:0}},
+  'Antônio Ribeiro':   {admissao:'2019-06-10', media:2.18, alertas:{celular:6,cinto:2,fadiga:1,distracao:3,velocidade:4}},
+  'Rafael Nunes':      {admissao:'2024-02-20', media:2.05, alertas:{celular:9,cinto:3,fadiga:2,distracao:5,velocidade:6}},
+  'Paulo Henrique':    {admissao:'2018-11-05', media:2.61, alertas:{celular:0,cinto:0,fadiga:0,distracao:1,velocidade:0}},
+  'Sandro Lima':       {admissao:'2022-05-10', media:2.38, alertas:{celular:2,cinto:1,fadiga:0,distracao:1,velocidade:2}},
+};
+const ALERTA_DEF=[
+  {k:'celular',lab:'Celular',ic:'📱'},{k:'cinto',lab:'Cinto',ic:'🔒'},
+  {k:'fadiga',lab:'Fadiga',ic:'😴'},{k:'distracao',lab:'Distração',ic:'👁️'},
+  {k:'velocidade',lab:'Velocidade',ic:'⏱️'}
+];
+function drv(nome){ return DRIVERS[nome]||{admissao:'',media:null,alertas:{}}; }
+const NIVEL_DEF=[{k:'ALTO',lab:'Alto',ic:'🔴'},{k:'MEDIO',lab:'Médio',ic:'🟠'},{k:'BAIXO',lab:'Baixo',ic:'🟡'}];
+function tipoLabel(t){ return String(t||'').replace(/_/g,' ').toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase()); }
+function alertasReais(nome){ return ALERTS? (ALERTS[norm(nome)]||null) : null; }
+// resumo de alertas de um motorista — usa o relatório real se carregado; senão o cadastro demo
+function alertasResumo(nome){
+  const real=alertasReais(nome);
+  if(real){
+    const badges=NIVEL_DEF.filter(d=>real.niveis[d.k]).map(d=>({lab:d.lab,ic:d.ic,n:real.niveis[d.k],hot:d.k==='ALTO'}));
+    return {total:real.total, badges, real:true, niveis:real.niveis, tipos:real.tipos};
+  }
+  if(ALERTS) return {total:0, badges:[], real:true, niveis:{}, tipos:{}};   // relatório real carregado, motorista sem alertas
+  const al=drv(nome).alertas||{};
+  const badges=ALERTA_DEF.filter(d=>(al[d.k]||0)>0).map(d=>({lab:d.lab,ic:d.ic,n:al[d.k],hot:(al[d.k]||0)>=5}));
+  return {total:totAlertas(al), badges, real:false};
+}
+function iniciais(nome){ return String(nome||'?').trim().split(/\s+/).map(p=>p[0]).slice(0,2).join('').toUpperCase(); }
+function tempoDeCasa(admissao){
+  const m=String(admissao||'').match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return '—';
+  const a=new Date(+m[1],+m[2]-1,+m[3]), hoje=new Date();
+  let meses=(hoje.getFullYear()-a.getFullYear())*12+(hoje.getMonth()-a.getMonth()); if(hoje.getDate()<a.getDate())meses--;
+  const anos=Math.floor(meses/12), r=meses%12;
+  if(anos<=0) return meses+' meses';
+  return anos+' ano'+(anos>1?'s':'')+(r?' e '+r+'m':'');
+}
+function totAlertas(al){ return ALERTA_DEF.reduce((s,d)=>s+(al[d.k]||0),0); }
+
+/* ============================================================
+   ESTADO
+   ============================================================ */
+let CFG = loadCfg();
+let RAW = loadData();       // { ponto, mov, trim } (linhas cruas importadas) ou null → demo
+let REAL = !!RAW;
+let RECORDS = [];           // registros motorista-dia já com análise
+let BASES = {ponto:true, mov:true, trim:true};   // quais das 3 fontes estão carregadas
+let ALERTS = null;          // agregado de alertas por motorista (norm) — do relatório de alertas
+let SORT = { k:'_sev', dir:-1 };
+
+function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
+function saveCfg(){ try{ localStorage.setItem(LS.cfg, JSON.stringify(CFG)); }catch(e){} }
+function loadData(){ try{ const d=JSON.parse(localStorage.getItem(LS.data)||'null'); return (d&&d.records)?d:null; }catch(e){ return null; } }
+function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }catch(e){} }
+
+/* ============================================================
+   MOTOR DE CONFERÊNCIA
+   ============================================================ */
+function analyze(rec){
+  const tol=CFG.tol, movMin=CFG.movMin;
+  // --- ponto: intervalos trabalhados = pares consecutivos ---
+  const punches=(rec.ponto||[]).map(toMin).filter(v=>v!=null).sort((a,b)=>a-b);
+  let entrada=punches.length?punches[0]:null, saida=punches.length?punches[punches.length-1]:null;
+  let horasPonto=0; for(let i=0;i+1<punches.length;i+=2) horasPonto+=punches[i+1]-punches[i];
+  // --- movimentação ---
+  const mov=(rec.movimento||[]).map(s=>({ini:toMin(s.ini),fim:toMin(s.fim),km:+s.km||0,placa:s.placa||''})).filter(s=>s.ini!=null&&s.fim!=null&&s.fim>=s.ini);
+  let horasMov=mov.reduce((a,s)=>a+(s.fim-s.ini),0);
+  let km=mov.reduce((a,s)=>a+s.km,0);
+  let primMov=mov.length?Math.min(...mov.map(s=>s.ini)):null;
+  let ultMov=mov.length?Math.max(...mov.map(s=>s.fim)):null;
+  // --- trimble ---
+  const segs=(rec.trimble&&rec.trimble.segs||[]).map(s=>({ini:toMin(s.ini),fim:toMin(s.fim),motorista:s.motorista,semelhanca:+s.semelhanca||null}));
+  // motorista identificado predominante (por tempo)
+  const byMot={};
+  segs.forEach(s=>{ const dur=(s.fim!=null&&s.ini!=null)?(s.fim-s.ini):1; byMot[s.motorista]=(byMot[s.motorista]||0)+Math.max(dur,1); });
+  let trimbleMot=null,best=-1; for(const k in byMot){ if(byMot[k]>best){best=byMot[k];trimbleMot=k;} }
+  const semVals=segs.map(s=>s.semelhanca).filter(v=>v!=null);
+  const semelhanca=semVals.length?Math.round(semVals.reduce((a,b)=>a+b,0)/semVals.length):null;
+
+  // --- janela da jornada p/ "fora da jornada" ---
+  let foraJornada=0;
+  if(entrada!=null&&saida!=null){
+    const lo=entrada-tol, hi=saida+tol;
+    mov.forEach(s=>{ if(s.ini<lo) foraJornada+=Math.min(s.fim,lo)-s.ini; if(s.fim>hi) foraJornada+=s.fim-Math.max(s.ini,hi); });
+    foraJornada=Math.max(0,foraJornada);
+  }
+
+  // --- ALMOÇO: pausas entre pares trabalhados; a maior pausa >= almocoMin é o almoço ---
+  const breaks=[]; for(let i=1;i+1<punches.length;i+=2) breaks.push([punches[i],punches[i+1]]);
+  const lunch = breaks.filter(b=>b[1]-b[0]>=CFG.almocoMin).sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]))[0]||null;
+  const jornadaSpan = (entrada!=null&&saida!=null)?(saida-entrada):0;
+  // caso A: marcou almoço mas dirigiu na pausa → interseção movimento × janela do almoço
+  let almocoDrivenSegs=[], almocoDirigido=0;
+  if(lunch){ const [ls,le]=lunch; mov.forEach(s=>{ const a=Math.max(s.ini,ls),b=Math.min(s.fim,le); if(b>a){almocoDrivenSegs.push({ini:a,fim:b});almocoDirigido+=b-a;} }); }
+  // caso B: seguiu direto sem intervalo (jornada longa sem pausa registrada)
+  const semPausa = punches.length>0 && !lunch && jornadaSpan>=CFG.jornadaMaxH*60;
+
+  // --- flags (só aciona quando a base necessária está carregada) ---
+  const flags=[];
+  const hasPonto=punches.length>0;
+  const hasMov=horasMov>=movMin;
+  const semSegs=segs.filter(s=>s.ini!=null&&s.fim!=null).length===0; // sem identificação Trimble
+  // PENDÊNCIAS: falta dado p/ conferir (não é "confere", é "não encontrado")
+  if(BASES.mov && mov.length===0 && hasPonto) flags.push({sev:'pendente',t:'Movimentação do veículo não encontrada'});
+  if(BASES.trim && semSegs && (hasPonto||hasMov)) flags.push({sev:'pendente',t:'Identificação Trimble não encontrada'});
+  // DIVERGÊNCIAS reais
+  if(BASES.ponto && BASES.mov && hasMov && !hasPonto) flags.push({sev:'critico',t:'Movimento sem registro de ponto'});
+  if(BASES.ponto && BASES.mov && hasPonto && mov.length && horasMov<movMin) flags.push({sev:'atencao',t:'Veículo praticamente sem movimento'});
+  if(BASES.trim && trimbleMot && norm(trimbleMot)!==norm(rec.motoristaEscala)) flags.push({sev:'critico',t:'Identificação divergente — câmera reconheceu '+firstName(trimbleMot)});
+  if(BASES.trim && semelhanca!=null && semelhanca<CFG.sem) flags.push({sev:'atencao',t:'Semelhança facial baixa ('+semelhanca+'%)'});
+  if(BASES.ponto && BASES.mov && foraJornada>CFG.fora) flags.push({sev:'atencao',t:'Dedo duro: '+hm(foraJornada)+' fora da jornada'});
+  if(BASES.ponto && BASES.mov && hasPonto && primMov!=null && primMov < entrada-tol) flags.push({sev:'atencao',t:'Veículo em movimento antes da entrada'});
+  // ALMOÇO
+  if(BASES.ponto && BASES.mov && almocoDirigido>=10) flags.push({sev:'atencao',t:'Marcou almoço mas conduziu na pausa ('+hm(almocoDirigido)+')'});
+  if(BASES.ponto && BASES.mov && semPausa && hasMov) flags.push({sev:'atencao',t:'Jornada sem intervalo de almoço (seguiu direto)'});
+
+  let sev = flags.some(f=>f.sev==='critico') ? 'critico'
+          : flags.some(f=>f.sev==='atencao') ? 'atencao'
+          : flags.some(f=>f.sev==='pendente') ? 'pendente'
+          : 'conforme';
+
+  const wi = weekInfo(rec.data);
+
+  // --- HORAS DEDO DURO = movimento não declarado no ponto ---
+  // com ponto: horas fora da janela batida; movimento sem ponto: 100% do movimento é dedo duro
+  let horasDedoDuro=0;
+  if(BASES.ponto && BASES.mov){
+    if(hasPonto) horasDedoDuro=foraJornada;
+    else if(hasMov) horasDedoDuro=horasMov;
+  }
+
+  return Object.assign({}, rec, {
+    punches, entrada, saida, horasPonto, mov, horasMov, km, primMov, ultMov,
+    segs, trimbleMot, semelhanca, foraJornada, horasDedoDuro, flags, sev,
+    semana: isoWeek(rec.data), semKey:wi.key, mesKey:wi.mesKey, mesLabel:wi.mesLabel,
+    pend: flags.filter(f=>f.sev==='pendente').length,
+    almocoDrivenSegs, almocoDirigido, semPausa, lunch,
+    movAusente: BASES.mov && mov.length===0,
+    idAusente: BASES.trim && semSegs,
+    idDivergente: flags.some(f=>f.t.startsWith('Identificação divergente')),
+    _key: rec.operacao+'|'+rec.data+'|'+rec.placa+'|'+rec.motoristaEscala
+  });
+}
+
+function build(){
+  const base = REAL ? RAW.records : demoRecords();
+  BASES = REAL ? Object.assign({ponto:true,mov:true,trim:false}, RAW.bases||{})
+               : { ponto:true, mov:true, trim:true };
+  RECORDS = base.map(analyze);
+  RECORDS.sort((a,b)=> a.data<b.data?1:a.data>b.data?-1:(a.operacao.localeCompare(b.operacao)) );
+}
+
+/* ============================================================
+   FILTROS
+   ============================================================ */
+function filtered(){
+  const op=$('#fOp').value, dia=$('#fDia').value, mot=$('#fMot').value, st=$('#fStatus').value, q=norm($('#fBusca').value);
+  return RECORDS.filter(r=>{
+    if(op && r.operacao!==op) return false;
+    if(dia && r.data!==dia) return false;
+    if(mot && r.motoristaEscala!==mot) return false;
+    if(st && r.sev!==st) return false;
+    if(q && !(norm(r.motoristaEscala).includes(q)||norm(r.placa).includes(q)||norm(r.trimbleMot).includes(q))) return false;
+    return true;
+  });
+}
+function fillFilters(){
+  const ops=[...new Set(RECORDS.map(r=>r.operacao))].sort();
+  const dias=[...new Set(RECORDS.map(r=>r.data))].sort().reverse();
+  const mots=[...new Set(RECORDS.map(r=>r.motoristaEscala))].sort();
+  fillSel('#fOp',ops); fillSel('#fMot',mots);
+  fillSel('#fDia',dias,brDate);
+}
+function fillSel(sel,arr,fmt){ const el=$(sel), cur=el.value; el.innerHTML='<option value="">'+el.options[0].text.replace(/\s*\(.*/,'')+'</option>'+arr.map(v=>`<option value="${v}">${fmt?fmt(v):v}</option>`).join(''); if(arr.includes(cur)) el.value=cur; }
+
+/* ============================================================
+   RENDER — KPIs
+   ============================================================ */
+function renderKpis(rows){
+  const total=rows.length;
+  const conf=rows.filter(r=>r.sev==='conforme').length;
+  const div=rows.filter(r=>r.sev!=='conforme').length;
+  const dedo=rows.reduce((a,r)=>a+r.horasDedoDuro,0);
+  const motsDedo=new Set(rows.filter(r=>r.horasDedoDuro>0).map(r=>r.motoristaEscala)).size;
+  const movSemPonto=rows.filter(r=>r.movimento.length>0 && r.punches.length===0).length;
+  const pontoSemMov=rows.filter(r=>r.punches.length>0 && r.movimento.length===0).length;
+  const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
+  const medFrota=(function(){ const a=motSet.map(m=>drv(m).media).filter(v=>v!=null); return a.length?a.reduce((x,y)=>x+y,0)/a.length:null; })();
+  let alertKpi=null;
+  if(ALERTS){ let tot=0,alto=0; motSet.forEach(m=>{ const a=alertasReais(m); if(a){ tot+=a.total; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto}; }
+  const K=[
+    {lab:'③ Horas Dedo Duro',val:hDec(dedo).replace('h','')+'<small>h</small>',sub:motsDedo+' motorista(s) c/ horas',ac:'var(--serious)'},
+    {lab:'Motoristas c/ dedo duro',val:motsDedo,sub:'horas não declaradas',ac:'var(--critical)'},
+    {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto',ac:'var(--critical)'},
+    {lab:'Ponto sem movimento',val:pontoSemMov,sub:'bateu ponto e não dirigiu',ac:'var(--warning)'},
+    alertKpi
+      ? {lab:'⚠ Alertas de velocidade',val:alertKpi.tot.toLocaleString('pt-BR'),sub:alertKpi.alto+' motorista(s) c/ nível alto',ac:'var(--s7)'}
+      : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)'},
+    {lab:'Motorista-dias',val:total,sub:'registros no filtro',ac:'var(--s2)'},
+  ];
+  $('#kpis').innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div>
+     <div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+}
+
+/* ============================================================
+   RENDER — RESUMO SEMANAL (Capivara: por operação + farol)
+   ============================================================ */
+function semanaAgg(rows){
+  // catálogo de semanas presentes (objeto {key,label,mesKey,mesLabel}), ordenado pela data
+  const wkMap={}; rows.forEach(r=>{ if(r.semKey && !wkMap[r.semKey]) wkMap[r.semKey]={key:r.semKey,label:r.semana,mesKey:r.mesKey,mesLabel:r.mesLabel}; });
+  const weeks=Object.values(wkMap).sort((a,b)=>a.key<b.key?-1:1);
+  const ultima=weeks.length?weeks[weeks.length-1].key:null;
+  const ops=[...new Set(rows.map(r=>r.operacao))].sort();
+  const data=ops.map(op=>{
+    const opRows=rows.filter(r=>r.operacao===op);
+    const mots={};
+    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,dd:0,dias:0,mov:0,ponto:0,semanas:{},semelSum:0,semelN:0,idDiv:0,pend:0});
+      m.dd+=r.horasDedoDuro; if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto;
+      m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+r.horasDedoDuro;
+      if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; } if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
+    Object.values(mots).forEach(m=>{ const d=drv(m.nome); m.media=d.media; m.alertas=d.alertas||{}; m.admissao=d.admissao;
+      m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.farolUlt=farol(ultima?(m.semanas[ultima]||0):0); });
+    return { op, list:Object.values(mots).sort((a,b)=>b.dd-a.dd),
+             dd:opRows.reduce((a,r)=>a+r.horasDedoDuro,0),
+             motsDedo:Object.values(mots).filter(m=>m.dd>0).length };
+  });
+  return { weeks, ultima, data };
+}
+function renderSemana(rows){
+  const box=$('#semanaBox');
+  if(!rows.length){ box.innerHTML='<div class="empty">Nenhum registro para o filtro atual.</div>'; return; }
+  const {weeks,data}=semanaAgg(rows);
+  box.innerHTML = data.map(g=>`
+    <div class="card op-block">
+      <div class="op-head"><h3>${g.op}</h3>
+        <div class="op-kpi"><span>${hDec(g.dd)}</span> dedo duro · <b>${g.motsDedo}</b> motorista(s) c/ horas · ${g.list.length} motorista(s)</div></div>
+      <div class="capgrid">${ g.list.map(m=>capinha(m,weeks)).join('') }</div>
+    </div>`).join('');
+}
+// "capinha" do motorista — clicável, leva ao detalhamento (ficha)
+function capinha(m,weeks){
+  const strip=farolStripHTML(m.semanas, weeks, {size:'sm'});
+  const medaOk = m.media!=null && m.media>=CFG.meta;
+  const medaTxt = m.media!=null ? m.media.toFixed(2).replace('.',',') : '—';
+  const alR = alertasResumo(m.nome); const totAl = alR.total;
+  const alBadges = alR.badges.slice(0,3).map(b=>`<span class="abadge ${b.hot?'hot':''}" title="${b.lab}">${b.ic}${b.n}</span>`).join('') || '<span class="abadge ok">sem alertas</span>';
+  return `<button class="capinha" data-mot="${encodeURIComponent(m.nome)}">
+    <div class="cap-top">
+      <span class="avatar" style="background:${FAROL_COR[m.farolUlt]}">${iniciais(m.nome)}</span>
+      <div class="cap-id"><b>${firstName(m.nome)}</b><small>${tempoDeCasa(m.admissao)} de casa</small></div>
+      <span class="fdot" title="farol da última semana" style="background:${FAROL_COR[m.farolUlt]}"></span>
+    </div>
+    <div class="cap-metrics">
+      <div class="cm"><span>Média</span><b class="${medaOk?'ok':'bad'}">${medaTxt}</b></div>
+      <div class="cm"><span>Dedo duro</span><b class="${m.dd>0?'bad':''}">${m.dd>0?hDec(m.dd):'0h'}</b></div>
+      <div class="cm"><span>Alertas</span><b class="${totAl>=5?'bad':''}">${totAl}</b></div>
+    </div>
+    <div class="cap-foot">
+      ${strip}
+      <span class="cap-alerts">${m.pend>0?`<span class="abadge pend" title="pendências (falta dado)">⚠ ${m.pend} pend.</span>`:alBadges}</span>
+    </div>
+    <span class="cap-cta">ver detalhamento →</span>
+  </button>`;
+}
+
+/* ============================================================
+   RENDER — LINHA DO TEMPO
+   ============================================================ */
+function tlWindow(rows){
+  let lo=Infinity, hi=-Infinity;
+  rows.forEach(r=>{
+    r.punches.forEach(p=>{lo=Math.min(lo,p);hi=Math.max(hi,p);});
+    r.mov.forEach(s=>{lo=Math.min(lo,s.ini);hi=Math.max(hi,s.fim);});
+    r.segs.forEach(s=>{ if(s.ini!=null){lo=Math.min(lo,s.ini);} if(s.fim!=null){hi=Math.max(hi,s.fim);} });
+  });
+  if(!isFinite(lo)){ lo=6*60; hi=19*60; }
+  lo=Math.floor((lo-30)/60)*60; hi=Math.ceil((hi+30)/60)*60;
+  lo=Math.max(0,lo); hi=Math.min(24*60,hi); if(hi-lo<120){lo=Math.max(0,lo-60);hi=Math.min(1440,hi+60);}
+  return {lo,hi};
+}
+function pos(min,w){ return ((min-w.lo)/(w.hi-w.lo))*100; }
+function seg(cls,ini,fim,w,label,extra){ const l=pos(ini,w), r=pos(fim,w); return `<div class="seg ${cls} ${extra||''}" style="left:${l}%;width:${Math.max(r-l,0.4)}%" title="${label||''}">${label||''}</div>`; }
+
+function renderTimelines(rows){
+  const box=$('#timelines'); const CAP=120;
+  const shown=rows.slice(0,CAP);
+  box.innerHTML = (timelinesHTML(shown) || '<div class="empty">Nenhum registro para o filtro atual.</div>')
+    + (rows.length>CAP?`<div class="empty">Mostrando ${CAP} de ${rows.length.toLocaleString('pt-BR')} — use os filtros (motorista, dia, operação) para focar a evidência.</div>`:'');
+}
+function timelinesHTML(rows){
+  if(!rows.length){ return ''; }
+  const w=tlWindow(rows);
+  // ticks de hora
+  let ticks=''; for(let t=w.lo;t<=w.hi;t+=60){ ticks+=`<span class="tick" style="left:${pos(t,w)}%">${String(t/60).padStart(2,'0')}h<i></i></span>`; }
+  let glines=''; for(let t=w.lo;t<=w.hi;t+=60){ glines+=`<div class="gl" style="left:${pos(t,w)}%"></div>`; }
+
+  return rows.map(r=>{
+    // ponto: pares trabalhados
+    let pontoSegs='';
+    for(let i=0;i+1<r.punches.length;i+=2){ pontoSegs+=seg('ponto',r.punches[i],r.punches[i+1],w, hm(r.punches[i])+'–'+hm(r.punches[i+1])); }
+    if(r.punches.length===1){ pontoSegs+=`<div class="seg ponto" style="left:${pos(r.punches[0],w)}%;width:1.2%" title="batida única">•</div>`; }
+    // almoço conduzido (marcou pausa mas dirigiu) — sobre a janela do almoço
+    const almocoSegs=(r.almocoDrivenSegs||[]).map(s=>seg('almoco',s.ini,s.fim,w,'dirigiu no almoço')).join('');
+    // movimento (rótulo: placa + km)
+    const multiPlaca=(r.placas&&r.placas.length>1);
+    const movSegs=r.mov.map(s=>{
+      const foraFlag = (r.entrada!=null && (s.ini<r.entrada-CFG.tol || s.fim>r.saida+CFG.tol)) ? 'fora':'';
+      const lab=[ (multiPlaca&&s.placa)?s.placa:'', s.km?Math.round(s.km)+' km':'' ].filter(Boolean).join(' · ');
+      return seg('mov',s.ini,s.fim,w, lab, foraFlag);
+    }).join('');
+    // trimble
+    const idSegs=r.segs.filter(s=>s.ini!=null&&s.fim!=null).map(s=>{
+      const ok = norm(s.motorista)===norm(r.motoristaEscala);
+      return seg(ok?'idok':'idbad', s.ini, s.fim, w, firstName(s.motorista)+(s.semelhanca!=null?' · '+s.semelhanca+'%':''));
+    }).join('');
+    const movLane = movSegs || (r.movAusente?'<span class="lane-empty">movimentação não encontrada</span>':'');
+    const idLane  = idSegs  || (r.idAusente ?'<span class="lane-empty">identificação não encontrada</span>':'');
+
+    const flagsHtml = r.flags.length ? r.flags.map(f=>`<span class="flag ${f.sev}"><span class="fi"></span>${f.t}</span>`).join('')
+                                     : `<span class="flag" style="border-color:color-mix(in srgb,var(--good) 45%,var(--border))"><span class="fi" style="background:var(--good)"></span>Tudo confere</span>`;
+    const stLabel = SEV_LABEL[r.sev]||r.sev;
+
+    const veicMeta = (r.placas&&r.placas.length)? (r.placas.length>1? r.placas.length+' veíc.' : r.placas[0]) : (r.placa||'—');
+    const trimbleTrack = BASES.trim ? `<div class="track"><span class="tlab">Trimble</span><div class="lane">${glines}${idLane}</div></div>` : '';
+    return `<div class="card tl-card">
+      <div class="tl-head">
+        <div class="who"><b>${r.motoristaEscala||'—'}</b><small>${(r.placas&&r.placas.join(', '))||r.placa||'—'} · ${r.operacao} · ${brDate(r.data)}</small></div>
+        <span class="status ${r.sev}"><span class="d"></span>${stLabel}</span>
+        <div class="meta">
+          <div class="m"><span>Ponto</span><b>${r.entrada!=null?hm(r.entrada)+'–'+hm(r.saida):'—'}</b></div>
+          <div class="m"><span>Direção</span><b>${r.primMov!=null?hm(r.primMov)+'–'+hm(r.ultMov):'—'}</b></div>
+          <div class="m"><span>Condutor</span><b style="color:${r.idDivergente?'var(--crit-ink)':'inherit'}">${firstName(r.trimbleMot||r.motoristaEscala)}</b></div>
+          <div class="m"><span>Dedo duro</span><b style="color:${r.horasDedoDuro>0?'var(--serious)':'inherit'}">${r.horasDedoDuro>0?hDec(r.horasDedoDuro):'—'}</b></div>
+          <div class="m"><span>Veículo</span><b>${veicMeta}</b></div>
+          <div class="m"><span>Km</span><b>${r.km?Math.round(r.km):'—'}</b></div>
+        </div>
+      </div>
+      <div class="ruler">${ticks}</div>
+      <div class="track"><span class="tlab">Ponto</span><div class="lane">${glines}${pontoSegs}${almocoSegs}</div></div>
+      <div class="track"><span class="tlab">Direção</span><div class="lane">${glines}${movLane}</div></div>
+      ${trimbleTrack}
+      <div class="flags">${flagsHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   FICHA DO MOTORISTA (detalhamento — 5º indicador)
+   ============================================================ */
+let fichaAtual=null;
+function openFicha(nome){
+  fichaAtual=nome;
+  renderFicha();
+  $$('#tabs button').forEach(x=>x.classList.remove('active'));
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-ficha'));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function voltarResumo(){
+  fichaAtual=null;
+  $$('#tabs button').forEach(x=>x.classList.toggle('active',x.dataset.tab==='semana'));
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-semana'));
+}
+function recomendacao(anosMeses, media, totAl, dd){
+  const anos = /(\d+)\s*ano/.test(anosMeses) ? +RegExp.$1 : 0;
+  const boaMedia = media!=null && media>=CFG.meta;
+  const poucosAlertas = totAl<=2;
+  if(anos>=2 && boaMedia && poucosAlertas)
+    return {cls:'manter',tit:'Perfil sólido — evento atípico pode ser relevado',txt:`${anosMeses} de casa, média ${media.toFixed(2).replace('.',',')} (≥ meta) e poucos alertas. Uma ocorrência isolada tende a ser exceção.`};
+  if((media!=null && media<CFG.meta) && (totAl>=5 || (drv(fichaAtual).alertas.celular||0)>=5))
+    return {cls:'questionar',tit:'Perfil de risco — revisar permanência',txt:`Média ${media!=null?media.toFixed(2).replace('.',','):'—'} (< meta), ${totAl} alertas${(drv(fichaAtual).alertas.celular||0)>=5?' (uso alto de celular)':''}${dd>0?' e '+hDec(dd)+' de dedo duro':''}. Reunir com gestão.`};
+  return {cls:'observar',tit:'Observar — manter plano de ação',txt:`Indicadores intermediários. Registrar causa-raiz e a ação da semana; comparar na próxima.`};
+}
+function renderFicha(){
+  const nome=fichaAtual; if(!nome){ $('#fichaBox').innerHTML=''; return; }
+  const recs=RECORDS.filter(r=>r.motoristaEscala===nome);
+  const d=drv(nome);
+  const {weeks}=semanaAgg(RECORDS);
+  const porSemana={}; recs.forEach(r=>porSemana[r.semKey]=(porSemana[r.semKey]||0)+r.horasDedoDuro);
+  const ddTotal=recs.reduce((a,r)=>a+r.horasDedoDuro,0);
+  const semArr=recs.map(r=>r.semelhanca).filter(v=>v!=null);
+  const semel=semArr.length?Math.round(semArr.reduce((a,b)=>a+b,0)/semArr.length):null;
+  const op=[...new Set(recs.map(r=>r.operacao))].join(', ');
+  const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
+  const alR=alertasResumo(nome); const totAl=alR.total;
+  const tempo=tempoDeCasa(d.admissao);
+  const medaOk=d.media!=null&&d.media>=CFG.meta;
+  const reco=recomendacao(tempo,d.media,totAl,ddTotal);
+  const strip=farolStripHTML(porSemana, weeks, {showHours:true});
+
+  // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
+  const tiposReais=alR.real?Object.keys(alR.tipos||{}):[];
+  const alertaSubt = alR.real ? (tiposReais.map(tipoLabel).join(', ')||'sem alertas no período') : '5 tipos monitorados (demo)';
+  const alertTiles = alR.real
+    ? NIVEL_DEF.map(a=>{ const n=(alR.niveis&&alR.niveis[a.k])||0; return `<div class="alert-tile ${a.k==='ALTO'&&n>0?'hot':''}"><div class="n">${a.ic} ${n}</div><div class="l">${a.lab}</div></div>`; }).join('')
+    : ALERTA_DEF.map(a=>{ const n=(d.alertas&&d.alertas[a.k])||0; return `<div class="alert-tile ${n>=5?'hot':''}"><div class="n">${a.ic} ${n}</div><div class="l">${a.lab}</div></div>`; }).join('');
+
+  $('#fichaBox').innerHTML = `
+    <div class="card" style="margin-bottom:14px">
+      <div class="ficha-hero">
+        <span class="avatar" style="background:${FAROL_COR[farol(weeks.length?(porSemana[weeks[weeks.length-1].key]||0):0)]}">${iniciais(nome)}</span>
+        <div style="flex:1;min-width:180px">
+          <h2>${nome}</h2>
+          <div class="sub">${op||'—'}${placas?' · '+placas:''} · <b>${tempo}</b> de casa · admissão ${d.admissao?brDate(d.admissao):'—'}</div>
+        </div>
+        <div class="reco ${reco.cls}"><b>${reco.tit}</b>${reco.txt}</div>
+      </div>
+    </div>
+
+    <div class="grid kpis" style="margin-bottom:6px">
+      <div class="card kpi"><div class="accent" style="background:${medaOk?'var(--good)':'var(--critical)'}"></div>
+        <div class="lab">④ Média realizada</div><div class="val tnum">${d.media!=null?d.media.toFixed(2).replace('.',','):'—'}</div><div class="sub">meta ${CFG.meta.toFixed(2).replace('.',',')} ${d.media!=null?(medaOk?'· acima ✓':'· abaixo'):''}</div></div>
+      <div class="card kpi"><div class="accent" style="background:var(--s5)"></div>
+        <div class="lab">① Aderência facial</div><div class="val tnum">${semel==null?'—':semel+'<small>%</small>'}</div><div class="sub">semelhança média (câmera)</div></div>
+      <div class="card kpi"><div class="accent" style="background:var(--serious)"></div>
+        <div class="lab">③ Dedo duro (total)</div><div class="val tnum">${hDec(ddTotal).replace('h','')}<small>h</small></div><div class="sub">movimento fora do ponto</div></div>
+      <div class="card kpi"><div class="accent" style="background:${(alR.niveis&&alR.niveis.ALTO)?'var(--critical)':(totAl>0?'var(--warning)':'var(--muted)')}"></div>
+        <div class="lab">Alertas (total)</div><div class="val tnum">${totAl.toLocaleString('pt-BR')}</div><div class="sub">${alR.real?'no período':'na câmera Trimble'}${alR.niveis&&alR.niveis.ALTO?' · '+alR.niveis.ALTO+' alto':''}</div></div>
+    </div>
+
+    <div class="sec-title"><h2>Alertas</h2><span>${alertaSubt}</span></div>
+    <div class="card"><div class="alert-row">${alertTiles}</div></div>
+
+    <div class="sec-title"><h2>Farol semanal — dedo duro</h2><span>semanas agrupadas por mês</span></div>
+    <div class="card">${strip}</div>
+
+    <div class="sec-title"><h2>Evidência — Ponto × Movimento × Trimble</h2><span>os dias que compõem o dedo duro deste motorista</span></div>
+    <div class="grid">${ timelinesHTML(recs) || '<div class="empty">Sem dias no filtro.</div>' }</div>
+  `;
+}
+
+/* ============================================================
+   RENDER — DIVERGÊNCIAS
+   ============================================================ */
+function renderDiverg(rows){
+  const div=rows.filter(r=>r.sev!=='conforme');
+  const items=[];
+  div.forEach(r=> r.flags.forEach(f=> items.push({r,f})) );
+  const sevRank={critico:0,atencao:1,pendente:2,info:3};
+  items.sort((a,b)=> (sevRank[a.f.sev]-sevRank[b.f.sev]) || (a.r.data<b.r.data?1:-1));
+  $('#divCount').textContent = items.length.toLocaleString('pt-BR')+' apontamento'+(items.length!==1?'s':'')+' em '+div.length.toLocaleString('pt-BR')+' motorista-dia'+(div.length!==1?'s':'');
+  $('#badgeDiv').textContent = div.length>999?'999+':div.length;
+  if(!items.length){ $('#divList').innerHTML='<div class="empty">Nenhuma divergência ou pendência no filtro atual. ✔️</div>'; return; }
+  const CAP=250, shown=items.slice(0,CAP);
+  $('#divList').innerHTML = shown.map(({r,f})=>`
+    <div class="card" style="display:flex;gap:14px;align-items:center;padding:13px 16px">
+      <span class="status ${f.sev}" style="flex:none"><span class="d"></span>${SEV_LABEL[f.sev]||f.sev}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600">${f.t}</div>
+        <div style="font-size:12px;color:var(--muted)">${r.motoristaEscala} · ${(r.placas&&r.placas.join(', '))||r.placa||'—'} · ${r.operacao} · ${brDate(r.data)}</div>
+      </div>
+      <div style="font-size:12px;text-align:right;color:var(--muted);flex:none">
+        Ponto ${r.entrada!=null?hm(r.entrada)+'–'+hm(r.saida):'—'}<br>Direção ${r.primMov!=null?hm(r.primMov)+'–'+hm(r.ultMov):'—'}
+      </div>
+    </div>`).join('') + (items.length>CAP?`<div class="empty">Mostrando ${CAP} de ${items.length.toLocaleString('pt-BR')} — filtre por operação, motorista ou situação.</div>`:'');
+}
+
+/* ============================================================
+   RENDER — CONSOLIDADO
+   ============================================================ */
+function renderTable(rows){
+  const sevRank={critico:0,atencao:1,pendente:2,conforme:3};
+  const get=(r,k)=>{
+    if(k==='_sev') return sevRank[r.sev];
+    if(k==='entrada') return r.entrada==null?-1:r.entrada;
+    if(k==='primMov') return r.primMov==null?-1:r.primMov;
+    if(k==='trimbleMot') return norm(r.trimbleMot);
+    return r[k];
+  };
+  const sorted=[...rows].sort((a,b)=>{ let x=get(a,SORT.k),y=get(b,SORT.k); if(x<y)return -1*SORT.dir; if(x>y)return 1*SORT.dir; return 0; });
+  $('#tblBody').innerHTML = sorted.map(r=>{
+    const chip=`<span class="chip ${r.sev}">${SEV_LABEL[r.sev]||r.sev}</span>`;
+    const veic=(r.placas&&r.placas.length)? (r.placas.length>1? r.placas.length+' veíc.' : r.placas[0]) : (r.placa||'—');
+    const ddCell = r.horasDedoDuro>0?`<span class="badcell">${hm(r.horasDedoDuro)}</span>`:'—';
+    return `<tr>
+      <td>${r.operacao}</td><td class="tnum">${brDate(r.data)}</td>
+      <td>${r.motoristaEscala||'—'}</td>
+      <td title="${(r.placas&&r.placas.join(', '))||''}">${veic}</td>
+      <td class="tnum">${r.entrada!=null?hm(r.entrada)+'–'+hm(r.saida):(r.punches.length?'—':'<span class="pendcell">sem ponto</span>')}</td>
+      <td class="tnum">${r.horasPonto?hDec(r.horasPonto):'—'}</td>
+      <td class="tnum">${r.primMov!=null?hm(r.primMov)+'–'+hm(r.ultMov):(r.movimento.length?'—':'<span class="pendcell">sem direção</span>')}</td>
+      <td class="tnum">${r.horasMov?hDec(r.horasMov):'—'}</td>
+      <td class="tnum">${ddCell}</td>
+      <td>${chip}</td></tr>`;
+  }).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:30px">Nenhum registro.</td></tr>';
+}
+
+/* ============================================================
+   RENDER GERAL
+   ============================================================ */
+function renderAll(){
+  const rows=filtered();
+  renderKpis(rows);
+  renderSemana(rows);
+  renderTimelines(rows);
+  renderDiverg(rows);
+  renderTable(rows);
+  const pill=$('#dataModePill'), txt=$('#dataModeTxt');
+  if(REAL){ pill.classList.add('real'); txt.textContent='dados reais · '+(RECORDS.length)+' registros'; }
+  else { pill.classList.remove('real'); txt.textContent='dados de demonstração'; }
+}
+
+/* ============================================================
+   IMPORTAÇÃO DE ARQUIVOS
+   ============================================================ */
+function readFile(file, cb){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  const rd=new FileReader();
+  if(ext==='xlsx'||ext==='xls'){
+    if(typeof XLSX==='undefined'){ toast('Sem internet p/ ler Excel — salve como CSV'); return; }
+    rd.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; cb(XLSX.utils.sheet_to_json(ws,{defval:''})); }catch(err){ toast('Erro ao ler Excel'); } };
+    rd.readAsArrayBuffer(file);
+  } else {
+    rd.onload=e=>{ cb(parseCSV(decodeText(e.target.result))); };
+    rd.readAsArrayBuffer(file);   // lê bytes p/ detectar acentuação (UTF-8 ou Windows-1252)
+  }
+}
+function decodeText(buf){
+  try{ return new TextDecoder('utf-8',{fatal:true}).decode(buf); }
+  catch(_){ try{ return new TextDecoder('windows-1252').decode(buf); }
+            catch(e){ return new TextDecoder('iso-8859-1').decode(buf); } }
+}
+function splitCSVLine(l,delim){ const out=[]; let cur='',q=false; for(let i=0;i<l.length;i++){ const c=l[i];
+    if(c==='"'){ if(q&&l[i+1]==='"'){cur+='"';i++;} else q=!q; }
+    else if(c===delim&&!q){ out.push(cur); cur=''; } else cur+=c; } out.push(cur); return out.map(s=>s.trim()); }
+function parseCSV(text){
+  text=text.replace(/^﻿/,''); const lines=text.split(/\r?\n/).filter(l=>l.trim().length);
+  if(!lines.length) return [];
+  const delim = (lines[0].match(/;/g)||[]).length >= (lines[0].match(/,/g)||[]).length ? ';' : ',';
+  const head=splitCSVLine(lines[0],delim);
+  return lines.slice(1).map(l=>{ const c=splitCSVLine(l,delim); const o={}; head.forEach((h,i)=>o[h]=c[i]!=null?c[i]:''); return o; });
+}
+// AGREGA o relatório de alertas em streaming (não guarda as ~337 mil linhas)
+function aggAlertas(text){
+  text=text.replace(/^﻿/,''); const nl=text.indexOf('\n'); if(nl<0) return {A:{},n:0};
+  const first=text.slice(0,nl).replace(/\r$/,'');
+  const delim=(first.match(/;/g)||[]).length>=(first.match(/,/g)||[]).length?';':',';
+  const head=splitCSVLine(first,delim); const H={}; head.forEach((h,i)=>H[norm(h)]=i);
+  const find=(...ns)=>{ for(const n of ns){ for(const k in H){ if(k.indexOf(n)>=0) return H[k]; } } return -1; };
+  const iMot=find('MOTORISTA'), iTipo=find('TIPO'), iNivel=find('NIVEL'), iData=find('DATA'), iDesc=find('DESCONSIDERADO'), iUO=find('UO'), iPlaca=find('PLACA','VEICULO');
+  const A={}; let n=0, start=nl+1;
+  while(start<text.length){
+    let end=text.indexOf('\n',start); if(end<0) end=text.length;
+    const line=text.slice(start, text.charCodeAt(end-1)===13?end-1:end); start=end+1;
+    if(!line) continue;
+    const c=splitCSVLine(line,delim); if(iTipo>=0 && c.length<=iTipo) continue;
+    if(iDesc>=0 && norm(c[iDesc]||'')[0]==='S') continue;         // desconsiderado
+    const nome=(c[iMot]||'').trim(); if(!nome) continue; const nn=norm(nome);
+    const tipo=((c[iTipo]||'').trim()||'ALERTA'), nivel=norm(c[iNivel]||'');
+    const a=(A[nn]=A[nn]||{nome, total:0, niveis:{}, tipos:{}, semanas:{}});
+    a.total++; a.tipos[tipo]=(a.tipos[tipo]||0)+1; if(nivel)a.niveis[nivel]=(a.niveis[nivel]||0)+1;
+    if(iData>=0){ const d=isoDate(splitDT(c[iData]).date||c[iData]); if(d){ const wk=weekInfo(d).key; if(wk)a.semanas[wk]=(a.semanas[wk]||0)+1; } }
+    n++;
+  }
+  return {A,n};
+}
+// localizar coluna por apelidos (sem acento, contém)
+function col(row, aliases){ const keys=Object.keys(row); for(const a of aliases){ const na=norm(a); const k=keys.find(k=>norm(k).includes(na)); if(k) return k; } return null; }
+function splitDT(v){ // "dd/mm/yyyy HH:MM" | "HH:MM" | "yyyy-mm-dd HH:MM"
+  v=String(v||'').trim(); const t=v.match(/(\d{1,2}:\d{2})/); const d=v.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+  return { date:d?isoDate(d[0]):'', time:t?t[1]:'' }; }
+
+let pending={ponto:null,mov:null};
+function numBR(v){ v=String(v==null?'':v).trim(); if(v.indexOf(',')>=0) return parseFloat(v.replace(/\./g,'').replace(',','.'))||0; return parseFloat(v)||0; }
+
+function ingest(){
+  const P=pending.ponto||[], M=pending.mov||[];
+  if(!P.length && !M.length){ toast('Carregue a jornada (ponto) e a movimentação'); return; }
+
+  // ---- 1) JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia) ----
+  const ponto={}, roster=new Set(), opBy={};
+  P.forEach(row=>{
+    const cN=col(row,['nome do funcionario','funcionario','colaborador','motorista','nome']);
+    const cDep=col(row,['departamento','operacao','setor','filial']);
+    const cD=col(row,['dia','data']);
+    const nome=cN?String(row[cN]).trim():''; if(!nome) return;
+    const data=cD?isoDate(splitDT(row[cD]).date||row[cD]):''; if(!data) return;
+    const nn=norm(nome); roster.add(nn); if(cDep && !opBy[nn]) opBy[nn]=String(row[cDep]).trim();
+    // coleta batidas na ordem Entrada1,Saída1,Entrada2,... (ignora "Justificado"/vazio)
+    const hs=[];
+    for(let n=1;n<=8;n++){
+      const ce=col(row,['entrada '+n]); if(ce){ const t=String(row[ce]).match(/(\d{1,2}:\d{2})/); if(t) hs.push(t[1]); }
+      const cs=col(row,['saida '+n,'saída '+n]); if(cs){ const t=String(row[cs]).match(/(\d{1,2}:\d{2})/); if(t) hs.push(t[1]); }
+    }
+    if(!hs.length){ const cH=col(row,['hora','horario','batida']); if(cH){ const t=String(row[cH]).match(/(\d{1,2}:\d{2})/); if(t) hs.push(t[1]); } }
+    if(!hs.length) return; // dia sem batida (justificado/folga)
+    const k=nn+'|'+data; const g=(ponto[k]=ponto[k]||{nome,data,punches:[]}); hs.forEach(h=>g.punches.push(h));
+  });
+
+  // ---- 2) MOVIMENTAÇÃO + IDENTIFICAÇÃO (Trimble): eventos "Movimento" por (motoristaNorm|dia) ----
+  const movRaw={};
+  M.forEach(row=>{
+    const cOcc=col(row,['ocorrencia','status','evento','situacao']);
+    if(cOcc && !norm(row[cOcc]).includes('MOVIMENTO')) return;               // só deslocamento
+    const cM=col(row,['motorista','condutor']); const nome=cM?String(row[cM]).trim():''; if(!nome) return;
+    const nn=norm(nome); if(!roster.has(nn)) return;                          // escopo: motoristas da jornada
+    const cIni=col(row,['data/hora inicial','inicial','datahora_inicial','inicio','ini']);
+    const cFim=col(row,['data/hora final','final','datahora_final','fim']);
+    const cP=col(row,['veiculo','placa','patante']); const cKm=col(row,['distancia','km','percorrida']);
+    const cD=col(row,['data_arquivo','data','dia']);
+    const di=cIni?splitDT(row[cIni]):{date:'',time:''}, df=cFim?splitDT(row[cFim]):{date:'',time:''};
+    const data=di.date||(cD?isoDate(splitDT(row[cD]).date||row[cD]):''); const ini=toMin(di.time), fim=toMin(df.time);
+    if(!data||ini==null||fim==null||fim<ini) return;
+    const placa=cP?String(row[cP]).toUpperCase().replace(/\s|-/g,''):'';
+    const k=nn+'|'+data; const g=(movRaw[k]=movRaw[k]||{nome,data,segs:[]});
+    g.segs.push({ini,fim,km:cKm?numBR(row[cKm]):0,placa});
+  });
+  // merge de segmentos próximos (Trimble fragmenta muito Movimento/Parado)
+  const GAP=Math.max(CFG.movMin,10);
+  Object.values(movRaw).forEach(g=>{
+    g.segs.sort((a,b)=>a.ini-b.ini); const merged=[];
+    g.segs.forEach(s=>{ const last=merged[merged.length-1];
+      if(last && s.ini-last.fim<=GAP){ last.fim=Math.max(last.fim,s.fim); last.km+=s.km; if(s.placa&&last.placas.indexOf(s.placa)<0)last.placas.push(s.placa); }
+      else merged.push({ini:s.ini,fim:s.fim,km:s.km,placas:s.placa?[s.placa]:[]}); });
+    g.merged=merged;
+  });
+
+  // ---- 3) JOIN por motorista + dia ----
+  const keys=new Set([...Object.keys(ponto),...Object.keys(movRaw)]); const records=[];
+  keys.forEach(k=>{
+    const sep=k.indexOf('|'), nn=k.slice(0,sep), data=k.slice(sep+1);
+    const pp=ponto[k], mm=movRaw[k];
+    const nome=(pp&&pp.nome)||(mm&&mm.nome)||nn;
+    const movimento=(mm?mm.merged:[]).map(s=>({ini:hm(s.ini),fim:hm(s.fim),km:s.km,placa:s.placas[0]||''}));
+    const placas=[...new Set((mm?mm.merged:[]).flatMap(s=>s.placas))];
+    records.push({ operacao:opBy[nn]||'—', data, placa:placas[0]||'', placas, motoristaEscala:nome,
+      ponto: pp?pp.punches.slice():[], movimento, trimble:{segs:[]} });
+  });
+
+  if(!records.length){ toast('Não consegui cruzar — confira as colunas na aba Dados'); return; }
+  RAW={ records, bases:{ponto:!!P.length,mov:!!M.length,trim:false}, counts:{ponto:P.length,mov:M.length,alertas:ALERTS_N} };
+  if(ALERTS) RAW.alertas=ALERTS;
+  REAL=true; saveData();
+  build(); fillFilters(); renderAll(); updateDropStatus();
+  toast('Cruzado ✓ '+records.length+' motorista-dias · '+roster.size+' motoristas');
+}
+
+let ALERTS_N=0;
+function loadAlertas(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  const done=(text)=>{ try{
+      const r=aggAlertas(text); ALERTS=r.A; ALERTS_N=r.n;
+      if(REAL && RAW){ RAW.alertas=ALERTS; RAW.counts=RAW.counts||{}; RAW.counts.alertas=r.n; saveData(); }
+      updateDropStatus(); renderAll();
+      toast('Alertas ✓ '+r.n.toLocaleString('pt-BR')+' eventos · '+Object.keys(r.A).length+' motoristas');
+    }catch(err){ toast('Erro ao processar alertas'); } };
+  const rd=new FileReader();
+  if(ext==='zip'){
+    if(typeof JSZip==='undefined'){ toast('Sem internet p/ abrir .zip — extraia o CSV e carregue'); return; }
+    rd.onload=e=>{ JSZip.loadAsync(e.target.result).then(zip=>{
+        const name=Object.keys(zip.files).find(f=>/\.csv$/i.test(f)); if(!name){ toast('Zip sem CSV dentro'); return; }
+        return zip.files[name].async('arraybuffer').then(ab=>done(decodeText(ab)));
+      }).catch(()=>toast('Erro ao abrir o zip')); };
+    rd.readAsArrayBuffer(file);
+  } else { rd.onload=e=>done(decodeText(e.target.result)); rd.readAsArrayBuffer(file); }
+}
+
+function updateDropStatus(){
+  const set=(id,n,dropId,unit)=>{ $(id).textContent = n? (n.toLocaleString('pt-BR')+' '+(unit||'linhas')+' ✓') : (dropId==='#drop-alertas'?'nenhum arquivo':'nenhum arquivo — usando demonstração'); $(dropId).classList.toggle('loaded',!!n); };
+  set('#stPonto', (pending.ponto&&pending.ponto.length)||(RAW&&RAW.counts&&RAW.counts.ponto)||0, '#drop-ponto');
+  set('#stMov',   (pending.mov&&pending.mov.length)  ||(RAW&&RAW.counts&&RAW.counts.mov)  ||0, '#drop-mov');
+  set('#stAlertas', ALERTS_N||(RAW&&RAW.counts&&RAW.counts.alertas)||0, '#drop-alertas', 'alertas');
+}
+
+/* ============================================================
+   EXPORT CSV
+   ============================================================ */
+function exportCsv(){
+  const rows=filtered();
+  const head=['Operacao','Dia','Motorista','Veiculos','Ponto_entrada','Ponto_saida','Horas_ponto','Direcao_inicio','Direcao_fim','Horas_direcao','Km','Dedo_duro_min','Situacao','Apontamentos'];
+  const lines=[head.join(';')];
+  rows.forEach(r=>lines.push([
+    r.operacao,brDate(r.data),r.motoristaEscala,'"'+((r.placas&&r.placas.join(', '))||r.placa||'')+'"',
+    r.entrada!=null?hm(r.entrada):'',r.saida!=null?hm(r.saida):'',(r.horasPonto/60).toFixed(2),
+    r.primMov!=null?hm(r.primMov):'',r.ultMov!=null?hm(r.ultMov):'',(r.horasMov/60).toFixed(2),
+    Math.round(r.km),Math.round(r.horasDedoDuro),
+    r.sev,'"'+r.flags.map(f=>f.t).join(' | ')+'"'
+  ].join(';')));
+  baixarCsv(lines,'conferencia_jornada_movimentacao.csv');
+}
+function exportSemana(){
+  const {weeks,data}=semanaAgg(filtered());
+  const head=['Operacao','Motorista','Horas_dedo_duro','Dias_com_DD','Horas_ponto','Horas_movimento'].concat(weeks.map(w=>'Farol_'+w.mesLabel+'_'+w.label));
+  const lines=[head.join(';')];
+  data.forEach(g=>g.list.forEach(m=>{
+    const far=weeks.map(w=> (w.key in m.semanas)?farol(m.semanas[w.key]):'');
+    lines.push([g.op,m.nome,(m.dd/60).toFixed(2),m.dias,(m.ponto/60).toFixed(2),(m.mov/60).toFixed(2)].concat(far).join(';'));
+  }));
+  baixarCsv(lines,'resumo_semanal_dedo_duro.csv');
+}
+function baixarCsv(lines,nome){
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nome; a.click();
+  toast('CSV exportado ✓');
+}
+
+/* ============================================================
+   EVENTOS / INIT
+   ============================================================ */
+// tabs
+$('#tabs').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+  $$('#tabs button').forEach(x=>x.classList.toggle('active',x===b));
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+b.dataset.tab)); });
+// capinha do motorista → detalhamento (ficha)
+$('#semanaBox').addEventListener('click',e=>{ const c=e.target.closest('.capinha'); if(!c)return; openFicha(decodeURIComponent(c.dataset.mot)); });
+$('#fichaBack').onclick=voltarResumo;
+// tema
+function applyTheme(t){ document.documentElement.setAttribute('data-theme',t); try{localStorage.setItem(LS.theme,t);}catch(e){} }
+$('#themeBtn').onclick=()=>applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
+(function(){ let t='light'; try{t=localStorage.getItem(LS.theme)||'light';}catch(e){} if(t==='dark')applyTheme('dark'); })();
+$('#printBtn').onclick=()=>window.print();
+// filtros
+['#fOp','#fDia','#fMot','#fStatus'].forEach(s=>$(s).addEventListener('change',renderAll));
+$('#fBusca').addEventListener('input',renderAll);
+$('#clearFilters').onclick=()=>{ ['#fOp','#fDia','#fMot','#fStatus'].forEach(s=>$(s).value=''); $('#fBusca').value=''; renderAll(); };
+// ordenação tabela
+$$('#tbl thead th').forEach(th=>th.onclick=()=>{ const k=th.dataset.k; SORT.dir = (SORT.k===k)? -SORT.dir : (k==='_sev'?1:1); SORT.k=k; renderTable(filtered()); });
+$('#expCsv').onclick=exportCsv;
+$('#expSemana').onclick=exportSemana;
+// config
+function bindCfg(id,key){ const el=$(id); el.value=CFG[key]; el.addEventListener('input',()=>{ CFG[key]=parseFloat(el.value)||0; saveCfg(); build(); fillFilters(); renderAll(); }); }
+bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH');
+// import
+$('#filePonto').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo jornada…'); readFile(e.target.files[0],rows=>{ pending.ponto=rows; updateDropStatus(); if(pending.mov) ingest(); }); } });
+$('#fileMov').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo movimentação (pode levar alguns segundos)…'); readFile(e.target.files[0],rows=>{ pending.mov=rows; updateDropStatus(); if(pending.ponto) ingest(); else toast('Agora carregue também a jornada (ponto)'); }); } });
+$('#fileAlertas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando alertas (arquivo grande, aguarde)…'); setTimeout(()=>loadAlertas(e.target.files[0]),30); } });
+$('#recalc').onclick=()=>{ ingest(); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+
+// INIT
+if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; }
+build(); fillFilters(); renderAll(); updateDropStatus();
+</script>
+</body>
+</html>
