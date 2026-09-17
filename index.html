@@ -253,12 +253,7 @@
   .alert-tile .l{font-size:11px;color:var(--muted);margin-top:2px}
 
   /* ============ IMPORT / DADOS ============ */
-  .drops{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-  .drops.drops-2{grid-template-columns:repeat(2,1fr)}
-  .drops.drops-4{grid-template-columns:repeat(4,1fr)}
-  @media(max-width:1100px){.drops.drops-4{grid-template-columns:repeat(2,1fr)}}
-  @media(max-width:900px){.drops,.drops.drops-2{grid-template-columns:1fr}}
-  @media(max-width:640px){.drops.drops-4{grid-template-columns:1fr}}
+  .drops{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
   .drop{border:1.5px dashed var(--border);border-radius:12px;padding:16px;background:var(--surface-2);position:relative}
   .drop h3{display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:4px}
   .drop .num{width:22px;height:22px;border-radius:50%;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
@@ -439,6 +434,20 @@
         <input type="file" id="fileTms" accept=".csv,.xlsx,.xls,.txt" hidden>
         <button class="btn solid" onclick="document.getElementById('fileTms').click()">Selecionar arquivo</button>
         <div class="status-line" id="stTms">nenhum arquivo</div>
+      </div>
+      <div class="drop" id="drop-abast">
+        <h3><span class="num">5</span> Abastecimento <span style="font-size:11px;color:var(--muted);font-weight:400">opcional · média real</span></h3>
+        <p>Consolidado de abastecimento (bombas). Aba <code>Abastecimentos</code>: <code>Motorista</code>, <code>Total Litros</code>, <code>Total Valor</code>, <code>Diferença Km</code>, <code>Media</code>.</p>
+        <input type="file" id="fileAbast" accept=".xlsx,.xls,.csv" hidden>
+        <button class="btn solid" onclick="document.getElementById('fileAbast').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stAbast">nenhum arquivo</div>
+      </div>
+      <div class="drop" id="drop-metas">
+        <h3><span class="num">6</span> Metas de média <span style="font-size:11px;color:var(--muted);font-weight:400">opcional</span></h3>
+        <p>Painel de médias (Telemetria). Aba <code>META GLOBAL</code>: <code>Operação</code> + <code>Meta</code> — vira a meta por operação.</p>
+        <input type="file" id="fileMetas" accept=".xlsx,.xls,.csv" hidden>
+        <button class="btn solid" onclick="document.getElementById('fileMetas').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stMetas">nenhum arquivo · meta única 2,40</div>
       </div>
     </div>
 
@@ -646,9 +655,9 @@ const ALERTA_DEF=[
   {k:'velocidade',lab:'Velocidade',ic:'⏱️'}
 ];
 function drv(nome){ return DRIVERS[nome]||{admissao:'',media:null,alertas:{}}; }
-// média real do motorista (km/litros da Trimble, somando os dias); cai no cadastro demo se não houver consumo
-function mediaDe(nome){ let km=0,l=0; for(const r of RECORDS){ if(r.motoristaEscala===nome){ km+=r.km||0; l+=r.litros||0; } } return l>0? km/l : (drv(nome).media!=null?drv(nome).media:null); }
-function mediaTemReal(){ return RECORDS.some(r=>r.litros>0); }
+// média oficial do motorista: abastecimento real (bombas) > estimativa Trimble (km/litros) > cadastro demo
+function mediaDe(nome){ if(ABAST){ const a=ABAST[norm(nome)]; if(a&&a.media!=null) return a.media; }
+  let km=0,l=0; for(const r of RECORDS){ if(r.motoristaEscala===nome){ km+=r.km||0; l+=r.litros||0; } } return l>0? km/l : (drv(nome).media!=null?drv(nome).media:null); }
 const NIVEL_DEF=[{k:'ALTO',lab:'Alto',ic:'🔴'},{k:'MEDIO',lab:'Médio',ic:'🟠'},{k:'BAIXO',lab:'Baixo',ic:'🟡'}];
 function tipoLabel(t){ return String(t||'').replace(/_/g,' ').toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase()); }
 function alertasReais(nome){ return ALERTS? (ALERTS[norm(nome)]||null) : null; }
@@ -685,7 +694,11 @@ let RECORDS = [];           // registros motorista-dia já com análise
 let BASES = {ponto:true, mov:true, trim:true};   // quais das 3 fontes estão carregadas
 let ALERTS = null;          // agregado de alertas por motorista (norm) — do relatório de alertas
 let TMS = null;             // placa → {centro, operacao} — do relatório do TMS (centro de resultado)
+let ABAST = null;           // motorista(norm) → {km, litros, valor, media, n} — do consolidado de abastecimento (real)
+let META_FAM = null;        // família de operação → meta média (km/l) — do Painel de médias (Telemetria)
 let SORT = { k:'_sev', dir:-1 };
+// meta de média para uma operação (por família; cai na meta única da config se não achar)
+function metaDe(operacao){ if(META_FAM){ const f=opFamily(operacao); if(f && META_FAM[f]!=null) return META_FAM[f]; } return CFG.meta; }
 
 function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
 function saveCfg(){ try{ localStorage.setItem(LS.cfg, JSON.stringify(CFG)); }catch(e){} }
@@ -826,7 +839,8 @@ function renderKpis(rows){
   const movSemPonto=rows.filter(r=>r.movimento.length>0 && r.punches.length===0).length;
   const pontoSemMov=rows.filter(r=>r.punches.length>0 && r.movimento.length===0).length;
   const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
-  const medFrota=(function(){ let km=0,l=0; rows.forEach(r=>{km+=r.km||0;l+=r.litros||0;}); if(l>0) return km/l;
+  const medFrota=(function(){ if(ABAST){ let km=0,l=0; motSet.forEach(m=>{ const a=ABAST[norm(m)]; if(a){km+=a.km;l+=a.litros;} }); if(l>0) return km/l; }
+    let km=0,l=0; rows.forEach(r=>{km+=r.km||0;l+=r.litros||0;}); if(l>0) return km/l;
     const a=motSet.map(m=>drv(m).media).filter(v=>v!=null); return a.length?a.reduce((x,y)=>x+y,0)/a.length:null; })();
   let alertKpi=null;
   if(ALERTS){ let tot=0,alto=0; motSet.forEach(m=>{ const a=alertasReais(m); if(a){ tot+=a.total; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto}; }
@@ -860,7 +874,7 @@ function semanaAgg(rows){
       m.dd+=r.horasDedoDuro; if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0;
       m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+r.horasDedoDuro;
       if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; } if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
-    Object.values(mots).forEach(m=>{ const d=drv(m.nome); m.media=m.litros>0?(m.km/m.litros):d.media; m.alertas=d.alertas||{}; m.admissao=d.admissao;
+    Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaDe(op); m.alertas=d.alertas||{}; m.admissao=d.admissao;
       m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.farolUlt=farol(ultima?(m.semanas[ultima]||0):0); });
     return { op, list:Object.values(mots).sort((a,b)=>b.dd-a.dd),
              dd:opRows.reduce((a,r)=>a+r.horasDedoDuro,0),
@@ -882,7 +896,7 @@ function renderSemana(rows){
 // "capinha" do motorista — clicável, leva ao detalhamento (ficha)
 function capinha(m,weeks){
   const strip=farolStripHTML(m.semanas, weeks, {size:'sm'});
-  const medaOk = m.media!=null && m.media>=CFG.meta;
+  const medaOk = m.media!=null && m.media>=(m.meta!=null?m.meta:CFG.meta);
   const medaTxt = m.media!=null ? m.media.toFixed(2).replace('.',',') : '—';
   const alR = alertasResumo(m.nome); const totAl = alR.total;
   const alBadges = alR.badges.slice(0,3).map(b=>`<span class="abadge ${b.hot?'hot':''}" title="${b.lab}">${b.ic}${b.n}</span>`).join('') || '<span class="abadge ok">sem alertas</span>';
@@ -1026,8 +1040,10 @@ function renderFicha(){
   const alR=alertasResumo(nome); const totAl=alR.total;
   const tempo=tempoDeCasa(d.admissao);
   const kmR=recs.reduce((a,r)=>a+(r.km||0),0), litrosR=recs.reduce((a,r)=>a+(r.litros||0),0);
-  const mediaR = litrosR>0 ? kmR/litrosR : d.media;    // média real (km/l) da Trimble, senão demo
-  const medaOk=mediaR!=null&&mediaR>=CFG.meta;
+  const abF=ABAST&&ABAST[norm(nome)];
+  const mediaR = (abF&&abF.media!=null)?abF.media:(litrosR>0?kmR/litrosR:d.media);   // abastecimento real > Trimble > demo
+  const metaFicha = metaDe(recs.length?recs[0].operacao:'');
+  const medaOk=mediaR!=null&&mediaR>=metaFicha;
   const reco=recomendacao(tempo,mediaR,totAl,ddTotal);
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
 
@@ -1052,7 +1068,7 @@ function renderFicha(){
 
     <div class="grid kpis" style="margin-bottom:6px">
       <div class="card kpi"><div class="accent" style="background:${medaOk?'var(--good)':'var(--critical)'}"></div>
-        <div class="lab">④ Média realizada</div><div class="val tnum">${mediaR!=null?mediaR.toFixed(2).replace('.',','):'—'}</div><div class="sub">${litrosR>0?'km/l · '+Math.round(kmR).toLocaleString('pt-BR')+' km / '+Math.round(litrosR).toLocaleString('pt-BR')+' L':'meta '+CFG.meta.toFixed(2).replace('.',',')}${mediaR!=null?(medaOk?' · acima ✓':' · abaixo da meta'):''}</div></div>
+        <div class="lab">④ Média realizada</div><div class="val tnum">${mediaR!=null?mediaR.toFixed(2).replace('.',','):'—'}</div><div class="sub">${abF?'real (bomba)':(litrosR>0?'estim. Trimble':'—')} · meta ${metaFicha.toFixed(2).replace('.',',')}${mediaR!=null?(medaOk?' ✓':' ✗'):''}</div></div>
       <div class="card kpi"><div class="accent" style="background:var(--s5)"></div>
         <div class="lab">① Aderência facial</div><div class="val tnum">${semel==null?'—':semel+'<small>%</small>'}</div><div class="sub">semelhança média (câmera)</div></div>
       <div class="card kpi"><div class="accent" style="background:var(--serious)"></div>
@@ -1182,47 +1198,62 @@ function exportOperacao(){
 /* ============================================================
    RENDER — MÉDIA (Indicador 4)
    ============================================================ */
-function farolMedia(m){ if(m==null) return 'verde'; if(m>=CFG.meta) return 'verde'; if(m>=CFG.meta*0.95) return 'amarelo'; return 'vermelho'; }
+function farolMediaVs(m,meta){ if(m==null) return 'verde'; if(m>=meta) return 'verde'; if(m>=meta*0.95) return 'amarelo'; return 'vermelho'; }
 function mediaAgg(rows){
   const mots={};
-  rows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,op:r.operacao,km:0,litros:0}); m.km+=r.km||0; m.litros+=r.litros||0; if(r.operacao&&r.operacao!=='—')m.op=r.operacao; });
-  return Object.values(mots).map(m=>({...m, media: m.litros>0? m.km/m.litros : (drv(m.nome).media!=null?drv(m.nome).media:null)}))
-    .filter(m=>m.media!=null).sort((a,b)=>a.media-b.media);
+  rows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,op:r.operacao,kmT:0,litrosT:0}); m.kmT+=r.km||0; m.litrosT+=r.litros||0; if(r.operacao&&r.operacao!=='—')m.op=r.operacao; });
+  return Object.values(mots).map(m=>{
+    const mediaT = m.litrosT>0? m.kmT/m.litrosT : (drv(m.nome).media!=null?drv(m.nome).media:null);
+    const ab = ABAST? ABAST[norm(m.nome)] : null;
+    const mediaA = ab? ab.media : null;
+    const meta = metaDe(m.op);
+    const oficial = mediaA!=null? mediaA : mediaT;             // abastecimento é a média oficial quando existe
+    return {...m, mediaT, mediaA, ab, meta, oficial, diff:(mediaA!=null&&mediaT!=null)?(mediaA-mediaT):null};
+  }).filter(m=>m.oficial!=null).sort((a,b)=> (a.oficial-a.meta)-(b.oficial-b.meta));   // pior (mais abaixo da meta) primeiro
 }
 function renderMedia(rows){
   const kbox=$('#mediaKpis'), box=$('#mediaBox');
-  const temReal = rows.some(r=>r.litros>0);
-  const list=mediaAgg(rows);
-  const kmT=list.reduce((a,m)=>a+m.km,0), litrosT=list.reduce((a,m)=>a+m.litros,0);
-  const medFrota = litrosT>0? kmT/litrosT : (list.length? list.reduce((a,m)=>a+m.media,0)/list.length : null);
-  const abaixo = list.filter(m=>m.media<CFG.meta).length;
-  const preco=CFG.precoLitro||0, custoReal=litrosT*preco, litrosMeta=CFG.meta>0?kmT/CFG.meta:0, dif=custoReal-litrosMeta*preco;
+  const list=mediaAgg(rows); const temAb=ABAST&&list.some(m=>m.mediaA!=null);
+  const abaixo=list.filter(m=>m.oficial<m.meta).length;
+  // frota (oficial) e conciliação
+  let kmA=0,litA=0,valA=0; list.forEach(m=>{ if(m.ab){kmA+=m.ab.km;litA+=m.ab.litros;valA+=m.ab.valor;} });
+  const medFrotaA = litA>0? kmA/litA : null;
+  const kmTr=list.reduce((a,m)=>a+m.kmT,0), litTr=list.reduce((a,m)=>a+m.litrosT,0);
+  const medFrotaTr = litTr>0? kmTr/litTr : null;
+  const medFrota = medFrotaA!=null?medFrotaA:medFrotaTr;
+  const rsL = litA>0? valA/litA : (CFG.precoLitro||0);
+  const litMeta = list.reduce((a,m)=>{ const km=m.ab?m.ab.km:m.kmT; return a+(m.meta>0?km/m.meta:0); },0);
+  const custoMeta = litMeta*rsL, difCusto = valA - custoMeta;   // >0 = gastou a mais que a meta
+  const difMediaFrota = (medFrotaA!=null&&medFrotaTr!=null)? (medFrotaA-medFrotaTr) : null;
   const brl=n=>'R$ '+Math.round(Math.abs(n)).toLocaleString('pt-BR');
   const K=[
-    {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:'meta '+CFG.meta.toFixed(2).replace('.',','),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--critical)'},
+    {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:temAb?'real (abastecimento)':'estimativa Trimble',ac:'var(--s3)'},
     {lab:'Abaixo da meta',val:abaixo,sub:'de '+list.length+' motoristas',ac:'var(--warning)'},
-    {lab:'Km rodados',val:Math.round(kmT).toLocaleString('pt-BR'),sub:'no filtro',ac:'var(--s2)'},
-    {lab:'Litros',val:temReal?Math.round(litrosT).toLocaleString('pt-BR'):'—',sub:temReal?'consumidos':'sem consumo na base',ac:'var(--s5)'},
-    {lab:(dif>0?'Custo a mais vs meta':'Economia vs meta'),val:temReal?brl(dif):'—',sub:temReal?('L a '+brl(preco).replace('R$ ','R$ ')+' · '+(dif>0?'gastou acima':'abaixo')+' da meta'):'—',ac:dif>0?'var(--critical)':'var(--good)'},
+    {lab:'Custo combustível',val:temAb?brl(valA):'—',sub:temAb?('R$ '+rsL.toFixed(2).replace('.',',')+'/L · '+Math.round(litA).toLocaleString('pt-BR')+' L'):'carregue abastecimento',ac:'var(--s2)'},
+    {lab:(difCusto>=0?'Custo a mais vs meta':'Economia vs meta'),val:temAb?brl(difCusto):'—',sub:temAb?(difCusto>=0?'acima':'abaixo')+' do custo na meta':'—',ac:difCusto>0?'var(--critical)':'var(--good)'},
+    {lab:'Trimble × Abastec.',val:(difMediaFrota==null?'—':(difMediaFrota>=0?'+':'')+difMediaFrota.toFixed(2).replace('.',',')),sub:difMediaFrota==null?'só uma fonte':'conciliação bomba × telemetria',ac:'var(--s5)'},
   ];
   kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
-  if(!list.length){ box.innerHTML='<div class="empty">Sem média no filtro — a média sai de <b>km ÷ litros</b> do relatório de movimentação (coluna Consumo). Carregue a movimentação e ajuste os filtros.</div>'; return; }
-  box.innerHTML=`<div class="tblwrap"><table style="min-width:720px"><thead><tr>
-      <th>Motorista</th><th>Operação</th><th>Km</th><th>Litros</th><th>Média (km/l)</th><th>vs Meta</th><th>Farol</th></tr></thead><tbody>${
-      list.map(m=>{ const gap=m.media-CFG.meta;
-        return `<tr><td>${m.nome}</td><td>${m.op||'—'}</td><td class="tnum">${Math.round(m.km).toLocaleString('pt-BR')}</td>
-          <td class="tnum">${m.litros>0?Math.round(m.litros).toLocaleString('pt-BR'):'—'}</td>
-          <td class="tnum" style="font-weight:650;color:${m.media>=CFG.meta?'var(--good-ink)':'var(--crit-ink)'}">${m.media.toFixed(2).replace('.',',')}</td>
-          <td class="tnum" style="color:${gap>=0?'var(--good-ink)':'var(--crit-ink)'}">${(gap>=0?'+':'')+gap.toFixed(2).replace('.',',')}</td>
-          <td><span class="fdot" style="background:${FAROL_COR[farolMedia(m.media)]}"></span></td></tr>`;
+  if(!list.length){ box.innerHTML='<div class="empty">Sem média no filtro. A média sai de <b>km ÷ litros</b> — carregue a <b>movimentação</b> (estimativa Trimble) e o <b>abastecimento</b> (real das bombas).</div>'; return; }
+  const nf=v=>v==null?'—':v.toFixed(2).replace('.',',');
+  box.innerHTML=`<div class="tblwrap"><table style="min-width:820px"><thead><tr>
+      <th>Motorista</th><th>Operação</th><th>Meta</th><th>Trimble (est.)</th><th>Abastec. (real)</th><th>Δ bomba×telem.</th><th>Custo R$</th><th>Farol</th></tr></thead><tbody>${
+      list.map(m=>{ const of=m.oficial; const cor=of>=m.meta?'var(--good-ink)':'var(--crit-ink)';
+        return `<tr><td>${m.nome}</td><td>${m.op||'—'}</td>
+          <td class="tnum" title="meta por operação">${nf(m.meta)}</td>
+          <td class="tnum" style="color:var(--muted)">${nf(m.mediaT)}</td>
+          <td class="tnum" style="font-weight:650;color:${m.mediaA!=null?cor:'var(--muted)'}">${m.mediaA!=null?nf(m.mediaA):'—'}</td>
+          <td class="tnum" style="color:${m.diff==null?'var(--muted)':(Math.abs(m.diff)>0.3?'var(--serious)':'var(--muted)')}">${m.diff==null?'—':(m.diff>=0?'+':'')+nf(m.diff)}</td>
+          <td class="tnum">${m.ab?('R$ '+Math.round(m.ab.valor).toLocaleString('pt-BR')):'—'}</td>
+          <td><span class="fdot" style="background:${FAROL_COR[farolMediaVs(of,m.meta)]}" title="oficial ${nf(of)} vs meta ${nf(m.meta)}"></span></td></tr>`;
       }).join('')
     }</tbody></table></div>`;
 }
 function exportMedia(){
   const list=mediaAgg(filtered()); if(!list.length){ toast('Sem média no filtro'); return; }
-  const head=['Motorista','Operacao','Km','Litros','Media_kml','Meta','Gap','Custo_litros_RS'];
-  const lines=[head.join(';')];
-  list.forEach(m=>lines.push([m.nome,m.op||'',Math.round(m.km),Math.round(m.litros),m.media.toFixed(2),CFG.meta.toFixed(2),(m.media-CFG.meta).toFixed(2),(m.litros*(CFG.precoLitro||0)).toFixed(2)].join(';')));
+  const head=['Motorista','Operacao','Meta','Media_Trimble','Media_Abastecimento','Diferenca','Km_abast','Litros_abast','Custo_RS','Abaixo_meta'];
+  const lines=[head.join(';')]; const nf=v=>v==null?'':v.toFixed(2);
+  list.forEach(m=>lines.push([m.nome,m.op||'',nf(m.meta),nf(m.mediaT),nf(m.mediaA),nf(m.diff),m.ab?Math.round(m.ab.km):'',m.ab?Math.round(m.ab.litros):'',m.ab?Math.round(m.ab.valor):'',(m.oficial<m.meta?'SIM':'nao')].join(';')));
   baixarCsv(lines,'media_por_motorista.csv');
 }
 
@@ -1288,14 +1319,15 @@ function placaKey(v){ return String(v||'').toUpperCase().replace(/[\s-]/g,''); }
 // nome curto da operação a partir da UO da Trimble ("TRANSMARONI - OPERAÇÃO FRIGO" → "FRIGO")
 function uoCurta(uo){ let s=String(uo||'').trim(); const m=s.match(/OPERA[ÇC][ÃA]O\s+(.+)$/i); if(m) return m[1].trim(); s=s.replace(/^GRUPO\s+/i,'').replace(/^TRANSMARONI\s*-?\s*/i,''); return s.trim(); }
 // família da operação — casa a UO Trimble com o centro de resultado do TMS
-const OP_FAMILIAS=['MERCADO LIVRE','CONTAINER','SHOPEE','HEINEKEN','UNILEVER','SOTREQ','WICKBOLD','CARREFOUR','MARFRIG','SEARA','PROCTER','CABOT','POLENGHI','ASSAI','MARLOG','M DIAS','CIRCUITO','FRIGO','BITREM','SECA','BAU','JBS','CARGAS','ACHE','MARS','BIG','TKS','CDA','POLENGHI','MELI'];
+const OP_FAMILIAS=['MERCADO LIVRE','MELI','CONTAINER','SHOPEE','HEINEKEN','UNILEVER','UNI','SOTREQ','WICKBOLD','CARREFOUR','MARFRIG','SEARA','PROCTER','CABOT','POLENGHI','ASSAI','MARLOG','M DIAS','CIRCUITO','FRIGO','FRIG','BITREM','SECA','BAU','JBS','CARGAS','ACHE','MARS','BIG','TKS','CDA','BIMBO','NESTLE'];
+const OP_CANON={MELI:'MERCADO LIVRE',UNI:'UNILEVER',FRIG:'FRIGO'};   // nomes diferentes entre sistemas → mesma família
 const OP_NAOOP=['LOCACAO','VENDIDO','MANUTENCAO','SINISTRO','PREPARACAO','PASSEIO','SEM PROJETO','PATIO','MANOBRA','DUPLA EXTRA','DESINSTALADO','ESTOQUE'];
 function opFamily(s){
   const n=norm(s); if(!n) return '';
   for(const k of OP_NAOOP) if(n.indexOf(k)>=0) return '(não-operacional)';
   const head=n.split(' - ')[0].trim();
-  for(const k of OP_FAMILIAS) if(head.indexOf(k)===0 || n.indexOf(k)===0) return k;
-  for(const k of OP_FAMILIAS) if(n.indexOf(k)>=0) return k;   // fallback: contém em qualquer parte (ex. "DEDICADO - SOTREQ")
+  for(const k of OP_FAMILIAS) if(head.indexOf(k)===0 || n.indexOf(k)===0) return OP_CANON[k]||k;
+  for(const k of OP_FAMILIAS) if(n.indexOf(k)>=0) return OP_CANON[k]||k;   // fallback: contém em qualquer parte
   return head;
 }
 // localizar coluna por apelidos (sem acento, contém)
@@ -1400,7 +1432,52 @@ function loadAlertas(file){
   } else { rd.onload=e=>done(decodeText(e.target.result)); rd.readAsArrayBuffer(file); }
 }
 
-let TMS_N=0;
+let TMS_N=0, ABAST_N=0, META_N=0;
+// lê uma aba específica de um Excel (por nome preferido ou pelas colunas necessárias)
+function loadXlsxSheet(file, prefer, needCols, cb){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(ext!=='xlsx' && ext!=='xls'){ readFile(file, rows=>cb(rows)); return; }
+  if(typeof XLSX==='undefined'){ toast('Sem internet p/ ler Excel'); return; }
+  const rd=new FileReader();
+  rd.onload=e=>{ try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    let name=wb.SheetNames.find(s=>prefer.some(p=>norm(s).indexOf(norm(p))>=0));
+    if(!name) name=wb.SheetNames.find(s=>{ const j=XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',header:1}); const hdr=(j[0]||[]).map(norm); return needCols.every(c=>hdr.some(h=>h.indexOf(norm(c))>=0)); });
+    name=name||wb.SheetNames[0];
+    cb(XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:''}), name);
+  }catch(err){ toast('Erro ao ler Excel'); } };
+  rd.readAsArrayBuffer(file);
+}
+// ABASTECIMENTO (bombas) → média real + custo por motorista
+function loadAbastecimento(file){
+  loadXlsxSheet(file, ['Abastecimento'], ['placa','litros'], rows=>{
+    if(!rows||!rows.length){ toast('Abastecimento vazio'); return; }
+    const r0=rows[0]; const cM=col(r0,['motorista']), cLit=col(r0,['total litros','litros']),
+      cVal=col(r0,['total valor','valor']), cDif=col(r0,['diferenca km','diferenca','dif km']), cMed=col(r0,['media']);
+    if(!cM || !cLit){ toast('Abastecimento: faltam colunas Motorista/Litros'); return; }
+    const A={};
+    rows.forEach(row=>{ const nome=String(row[cM]||'').trim(); if(!nome) return; const nn=norm(nome);
+      const lit=numBR(row[cLit]), med=cMed?numBR(row[cMed]):0, dif=cDif?numBR(row[cDif]):0, val=cVal?numBR(row[cVal]):0;
+      if(!(lit>0 && med>=0.5 && med<=9 && dif>0 && dif<3000)) return;    // descarta odômetro absurdo
+      const a=(A[nn]=A[nn]||{nome, km:0, litros:0, valor:0, n:0}); a.km+=dif; a.litros+=lit; a.valor+=val; a.n++; });
+    Object.values(A).forEach(a=>a.media=a.litros>0?a.km/a.litros:null);
+    ABAST=A; ABAST_N=Object.keys(A).length; updateDropStatus(); renderAll();
+    toast('Abastecimento ✓ '+ABAST_N.toLocaleString('pt-BR')+' motoristas (média real das bombas)');
+  });
+}
+// METAS (Painel de médias / Telemetria) → meta média por família de operação
+function loadMetas(file){
+  loadXlsxSheet(file, ['META GLOBAL','PAINEL DE MEDIAS','PAINEL DE MÉDIAS'], ['operacao','meta'], rows=>{
+    if(!rows||!rows.length){ toast('Metas vazio'); return; }
+    const r0=rows[0]; const cOp=col(r0,['operacao','operação']), cMeta=col(r0,['meta atualizada','meta']);
+    if(!cOp || !cMeta){ toast('Metas: faltam colunas Operação/Meta'); return; }
+    const byf={};
+    rows.forEach(row=>{ const op=row[cOp], mt=numBR(row[cMeta]); if(!op||!(mt>0&&mt<12)) return; const f=opFamily(op); if(f) (byf[f]=byf[f]||[]).push(mt); });
+    const M={}; for(const f in byf) M[f]=byf[f].reduce((a,b)=>a+b,0)/byf[f].length;
+    META_FAM=M; META_N=Object.keys(M).length; updateDropStatus(); renderAll();
+    toast('Metas ✓ '+META_N+' operações (por família)');
+  });
+}
 function ingestTMS(rows){
   if(!rows||!rows.length){ toast('TMS vazio'); return; }
   const r0=rows[0];
@@ -1435,11 +1512,14 @@ function batimentoRows(){
 }
 
 function updateDropStatus(){
-  const set=(id,n,dropId,unit)=>{ $(id).textContent = n? (n.toLocaleString('pt-BR')+' '+(unit||'linhas')+' ✓') : (['#drop-alertas','#drop-tms'].includes(dropId)?'nenhum arquivo':'nenhum arquivo — usando demonstração'); $(dropId).classList.toggle('loaded',!!n); };
+  const opc=['#drop-alertas','#drop-tms','#drop-abast','#drop-metas'];
+  const set=(id,n,dropId,unit,zero)=>{ $(id).textContent = n? (n.toLocaleString('pt-BR')+' '+(unit||'linhas')+' ✓') : (zero||(opc.includes(dropId)?'nenhum arquivo':'nenhum arquivo — usando demonstração')); $(dropId).classList.toggle('loaded',!!n); };
   set('#stPonto', (pending.ponto&&pending.ponto.length)||(RAW&&RAW.counts&&RAW.counts.ponto)||0, '#drop-ponto');
   set('#stMov',   (pending.mov&&pending.mov.length)  ||(RAW&&RAW.counts&&RAW.counts.mov)  ||0, '#drop-mov');
   set('#stAlertas', ALERTS_N||(RAW&&RAW.counts&&RAW.counts.alertas)||0, '#drop-alertas', 'alertas');
   set('#stTms', TMS_N, '#drop-tms', 'veículos');
+  set('#stAbast', ABAST_N, '#drop-abast', 'motoristas');
+  set('#stMetas', META_N, '#drop-metas', 'operações', 'nenhum arquivo · meta única '+CFG.meta.toFixed(2).replace('.',','));
 }
 
 /* ============================================================
@@ -1507,9 +1587,11 @@ $('#filePonto').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Len
 $('#fileMov').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo movimentação (pode levar alguns segundos)…'); readFile(e.target.files[0],rows=>{ pending.mov=rows; updateDropStatus(); if(pending.ponto) ingest(); else toast('Agora carregue também a jornada (ponto)'); }); } });
 $('#fileAlertas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando alertas (arquivo grande, aguarde)…'); setTimeout(()=>loadAlertas(e.target.files[0]),30); } });
 $('#fileTms').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo TMS…'); readFile(e.target.files[0],rows=>ingestTMS(rows)); } });
+$('#fileAbast').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo abastecimento (arquivo grande, aguarde)…'); setTimeout(()=>loadAbastecimento(e.target.files[0]),30); } });
+$('#fileMetas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo metas…'); loadMetas(e.target.files[0]); } });
 $('#recalc').onclick=()=>{ ingest(); };
-$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
-$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
 
 // INIT
 if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; PLACA_UO=RAW.placaUO||null; }
