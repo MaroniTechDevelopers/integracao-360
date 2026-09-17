@@ -255,7 +255,10 @@
   /* ============ IMPORT / DADOS ============ */
   .drops{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
   .drops.drops-2{grid-template-columns:repeat(2,1fr)}
+  .drops.drops-4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:1100px){.drops.drops-4{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:900px){.drops,.drops.drops-2{grid-template-columns:1fr}}
+  @media(max-width:640px){.drops.drops-4{grid-template-columns:1fr}}
   .drop{border:1.5px dashed var(--border);border-radius:12px;padding:16px;background:var(--surface-2);position:relative}
   .drop h3{display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:4px}
   .drop .num{width:22px;height:22px;border-radius:50%;background:var(--navy);color:var(--gold);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
@@ -301,6 +304,7 @@
     <button data-tab="linha">Linha do tempo</button>
     <button data-tab="diverg">Divergências <span class="badge" id="badgeDiv">0</span></button>
     <button data-tab="tabela">Consolidado</button>
+    <button data-tab="operacao">Operação por placa</button>
     <button data-tab="dados">Dados &amp; como usar</button>
   </nav>
 </header>
@@ -387,10 +391,18 @@
     </table></div>
   </section>
 
+  <!-- ===== OPERAÇÃO POR PLACA (batimento Trimble UO × TMS centro de resultado) ===== -->
+  <section class="view" id="view-operacao">
+    <div class="grid kpis" id="opKpis" style="grid-template-columns:repeat(5,1fr)"></div>
+    <div class="sec-title"><h2>Operação por placa — Trimble × TMS</h2><span>a UO da Trimble (dos alertas) confere com o centro de resultado do TMS?</span>
+      <button class="btn" id="expOper" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
+    <div id="opBox"></div>
+  </section>
+
   <!-- ===== DADOS ===== -->
   <section class="view" id="view-dados">
     <div class="sec-title"><h2>Carregar os relatórios</h2><span>cruza por motorista + dia · CSV/Excel · fica neste navegador</span></div>
-    <div class="drops drops-3">
+    <div class="drops drops-4">
       <div class="drop" id="drop-ponto">
         <h3><span class="num">1</span> Jornada (ponto)</h3>
         <p>Espelho de ponto. Colunas: <code>Nome do funcionário</code>, <code>Nome do departamento</code> (operação), <code>Dia</code>, <code>Entrada 1…6</code> / <code>Saída 1…6</code>.</p>
@@ -411,6 +423,13 @@
         <input type="file" id="fileAlertas" accept=".zip,.csv,.txt" hidden>
         <button class="btn solid" onclick="document.getElementById('fileAlertas').click()">Selecionar arquivo</button>
         <div class="status-line" id="stAlertas">nenhum arquivo</div>
+      </div>
+      <div class="drop" id="drop-tms">
+        <h3><span class="num">4</span> TMS — Veículos <span style="font-size:11px;color:var(--muted);font-weight:400">opcional</span></h3>
+        <p>Cadastro de veículos. Colunas: <code>Placa</code>, <code>Centro Resultado</code> (operação), e opcional <code>Tipo de Rodado</code>, <code>Carroceria</code>, <code>Propriedade</code>, <code>UF</code>.</p>
+        <input type="file" id="fileTms" accept=".csv,.xlsx,.xls,.txt" hidden>
+        <button class="btn solid" onclick="document.getElementById('fileTms').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stTms">nenhum arquivo</div>
       </div>
     </div>
 
@@ -652,6 +671,7 @@ let REAL = !!RAW;
 let RECORDS = [];           // registros motorista-dia já com análise
 let BASES = {ponto:true, mov:true, trim:true};   // quais das 3 fontes estão carregadas
 let ALERTS = null;          // agregado de alertas por motorista (norm) — do relatório de alertas
+let TMS = null;             // placa → {centro, operacao} — do relatório do TMS (centro de resultado)
 let SORT = { k:'_sev', dir:-1 };
 
 function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
@@ -1100,9 +1120,44 @@ function renderAll(){
   renderTimelines(rows);
   renderDiverg(rows);
   renderTable(rows);
+  renderBatimento();
   const pill=$('#dataModePill'), txt=$('#dataModeTxt');
   if(REAL){ pill.classList.add('real'); txt.textContent='dados reais · '+(RECORDS.length)+' registros'; }
   else { pill.classList.remove('real'); txt.textContent='dados de demonstração'; }
+}
+function renderBatimento(){
+  const kbox=$('#opKpis'), box=$('#opBox'); const rows=batimentoRows();
+  if(!rows){ kbox.innerHTML=''; box.innerHTML='<div class="empty">Carregue os relatórios de <b>Alertas</b> (dá a UO da Trimble por placa) e do <b>TMS</b> (centro de resultado) na aba <b>Dados</b> para ver o batimento de operação.</div>'; return; }
+  if(!rows.length){ kbox.innerHTML=''; box.innerHTML='<div class="empty">Nenhuma placa com UO da Trimble para comparar.</div>'; return; }
+  const total=rows.length, ok=rows.filter(r=>r.status==='ok').length, div=rows.filter(r=>r.status==='divergente').length,
+        naoop=rows.filter(r=>r.status==='nao_op').length, semtms=rows.filter(r=>r.status==='sem_tms').length;
+  const comp=total-semtms, pct=comp>0?Math.round(ok/comp*100):0;
+  const K=[
+    {lab:'Placas conferidas',val:total,sub:'com UO na Trimble',ac:'var(--s2)'},
+    {lab:'Operação bate',val:pct+'<small>%</small>',sub:ok+' de '+comp+' comparáveis',ac:'var(--good)'},
+    {lab:'Divergentes',val:div,sub:'Trimble ≠ TMS',ac:'var(--critical)'},
+    {lab:'TMS não-operacional',val:naoop,sub:'locação / manut. / sinistro',ac:'var(--warning)'},
+    {lab:'Sem centro no TMS',val:semtms,sub:'placa não achada no TMS',ac:'var(--pend)'},
+  ];
+  kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+  const chip={ok:'<span class="chip conforme">Bate</span>',divergente:'<span class="chip critico">Divergente</span>',nao_op:'<span class="chip atencao">TMS não-op.</span>',sem_tms:'<span class="chip pendente">Sem centro TMS</span>'};
+  box.innerHTML=`<div class="tblwrap"><table style="min-width:760px"><thead><tr>
+      <th>Placa</th><th>UO Trimble</th><th>Centro de resultado (TMS)</th><th>Veículo (TMS)</th><th>Status</th></tr></thead><tbody>${
+      rows.map(r=>{
+        const veic=r.tms?[r.tms.rodado,r.tms.carroceria,r.tms.prop,r.tms.uf].filter(Boolean).join(' · '):'';
+        const centroCell = r.status==='sem_tms'?'<span class="pendcell">não encontrada no TMS</span>'
+                         : (r.status==='divergente'?`<span class="badcell">${r.centro}</span>`:(r.centro||'—'));
+        return `<tr><td class="tnum">${r.placa}</td><td>${r.uo||'—'}</td><td>${centroCell}</td><td style="color:var(--muted);font-size:11.5px">${veic||'—'}</td><td>${chip[r.status]}</td></tr>`;
+      }).join('')
+    }</tbody></table></div>`;
+}
+function exportOperacao(){
+  const rows=batimentoRows(); if(!rows||!rows.length){ toast('Carregue Alertas + TMS'); return; }
+  const head=['Placa','UO_Trimble','Familia_Trimble','Centro_Resultado_TMS','Familia_TMS','Status','Rodado','Carroceria','Propriedade','UF'];
+  const lines=[head.join(';')];
+  const st={ok:'Bate',divergente:'Divergente',nao_op:'TMS nao-operacional',sem_tms:'Sem centro TMS'};
+  rows.forEach(r=>lines.push([r.placa,'"'+(r.uo||'')+'"',r.famT,'"'+(r.centro||'')+'"',r.famM,st[r.status],r.tms?r.tms.rodado:'',r.tms?r.tms.carroceria:'',r.tms?r.tms.prop:'',r.tms?r.tms.uf:''].join(';')));
+  baixarCsv(lines,'batimento_operacao_placa.csv');
 }
 
 /* ============================================================
@@ -1143,13 +1198,15 @@ function aggAlertas(text){
   const head=splitCSVLine(first,delim); const H={}; head.forEach((h,i)=>H[norm(h)]=i);
   const find=(...ns)=>{ for(const n of ns){ for(const k in H){ if(k.indexOf(n)>=0) return H[k]; } } return -1; };
   const iMot=find('MOTORISTA'), iTipo=find('TIPO'), iNivel=find('NIVEL'), iData=find('DATA'), iDesc=find('DESCONSIDERADO'), iUO=find('UO'), iPlaca=find('PLACA','VEICULO');
-  const A={}; let n=0, start=nl+1;
+  const A={}; const puo={}; let n=0, start=nl+1;
   while(start<text.length){
     let end=text.indexOf('\n',start); if(end<0) end=text.length;
     const line=text.slice(start, text.charCodeAt(end-1)===13?end-1:end); start=end+1;
     if(!line) continue;
     const c=splitCSVLine(line,delim); if(iTipo>=0 && c.length<=iTipo) continue;
     if(iDesc>=0 && norm(c[iDesc]||'')[0]==='S') continue;         // desconsiderado
+    // placa → UO (Trimble), independente de ter motorista
+    if(iPlaca>=0 && iUO>=0){ const pl=placaKey(c[iPlaca]); const uo=(c[iUO]||'').trim(); if(pl&&uo){ (puo[pl]=puo[pl]||{})[uo]=(puo[pl][uo]||0)+1; } }
     const nome=(c[iMot]||'').trim(); if(!nome) continue; const nn=norm(nome);
     const tipo=((c[iTipo]||'').trim()||'ALERTA'), nivel=norm(c[iNivel]||'');
     const a=(A[nn]=A[nn]||{nome, total:0, niveis:{}, tipos:{}, semanas:{}});
@@ -1157,7 +1214,23 @@ function aggAlertas(text){
     if(iData>=0){ const d=isoDate(splitDT(c[iData]).date||c[iData]); if(d){ const wk=weekInfo(d).key; if(wk)a.semanas[wk]=(a.semanas[wk]||0)+1; } }
     n++;
   }
-  return {A,n};
+  // UO predominante por placa
+  const placaUO={}; for(const pl in puo){ let best=-1,uo=''; for(const u in puo[pl]){ if(puo[pl][u]>best){best=puo[pl][u];uo=u;} } placaUO[pl]={uo, uoCurta:uoCurta(uo), n:best}; }
+  return {A,n,placaUO};
+}
+function placaKey(v){ return String(v||'').toUpperCase().replace(/[\s-]/g,''); }
+// nome curto da operação a partir da UO da Trimble ("TRANSMARONI - OPERAÇÃO FRIGO" → "FRIGO")
+function uoCurta(uo){ let s=String(uo||'').trim(); const m=s.match(/OPERA[ÇC][ÃA]O\s+(.+)$/i); if(m) return m[1].trim(); s=s.replace(/^GRUPO\s+/i,'').replace(/^TRANSMARONI\s*-?\s*/i,''); return s.trim(); }
+// família da operação — casa a UO Trimble com o centro de resultado do TMS
+const OP_FAMILIAS=['MERCADO LIVRE','CONTAINER','SHOPEE','HEINEKEN','UNILEVER','SOTREQ','WICKBOLD','CARREFOUR','MARFRIG','SEARA','PROCTER','CABOT','POLENGHI','ASSAI','MARLOG','M DIAS','CIRCUITO','FRIGO','BITREM','SECA','BAU','JBS','CARGAS','ACHE','MARS','BIG','TKS','CDA','POLENGHI','MELI'];
+const OP_NAOOP=['LOCACAO','VENDIDO','MANUTENCAO','SINISTRO','PREPARACAO','PASSEIO','SEM PROJETO','PATIO','MANOBRA','DUPLA EXTRA','DESINSTALADO','ESTOQUE'];
+function opFamily(s){
+  const n=norm(s); if(!n) return '';
+  for(const k of OP_NAOOP) if(n.indexOf(k)>=0) return '(não-operacional)';
+  const head=n.split(' - ')[0].trim();
+  for(const k of OP_FAMILIAS) if(head.indexOf(k)===0 || n.indexOf(k)===0) return k;
+  for(const k of OP_FAMILIAS) if(n.indexOf(k)>=0) return k;   // fallback: contém em qualquer parte (ex. "DEDICADO - SOTREQ")
+  return head;
 }
 // localizar coluna por apelidos (sem acento, contém)
 function col(row, aliases){ const keys=Object.keys(row); for(const a of aliases){ const na=norm(a); const k=keys.find(k=>norm(k).includes(na)); if(k) return k; } return null; }
@@ -1240,14 +1313,14 @@ function ingest(){
   toast('Cruzado ✓ '+records.length+' motorista-dias · '+roster.size+' motoristas');
 }
 
-let ALERTS_N=0;
+let ALERTS_N=0, PLACA_UO=null;   // PLACA_UO: placa → {uo, uoCurta} (UO Trimble, do relatório de alertas)
 function loadAlertas(file){
   const ext=(file.name.split('.').pop()||'').toLowerCase();
   const done=(text)=>{ try{
-      const r=aggAlertas(text); ALERTS=r.A; ALERTS_N=r.n;
-      if(REAL && RAW){ RAW.alertas=ALERTS; RAW.counts=RAW.counts||{}; RAW.counts.alertas=r.n; saveData(); }
+      const r=aggAlertas(text); ALERTS=r.A; ALERTS_N=r.n; PLACA_UO=r.placaUO||{};
+      if(REAL && RAW){ RAW.alertas=ALERTS; RAW.placaUO=PLACA_UO; RAW.counts=RAW.counts||{}; RAW.counts.alertas=r.n; saveData(); }
       updateDropStatus(); renderAll();
-      toast('Alertas ✓ '+r.n.toLocaleString('pt-BR')+' eventos · '+Object.keys(r.A).length+' motoristas');
+      toast('Alertas ✓ '+r.n.toLocaleString('pt-BR')+' eventos · '+Object.keys(r.A).length+' motoristas · '+Object.keys(PLACA_UO).length+' placas c/ UO');
     }catch(err){ toast('Erro ao processar alertas'); } };
   const rd=new FileReader();
   if(ext==='zip'){
@@ -1260,11 +1333,46 @@ function loadAlertas(file){
   } else { rd.onload=e=>done(decodeText(e.target.result)); rd.readAsArrayBuffer(file); }
 }
 
+let TMS_N=0;
+function ingestTMS(rows){
+  if(!rows||!rows.length){ toast('TMS vazio'); return; }
+  const r0=rows[0];
+  const cP=col(r0,['placa']), cC=col(r0,['centro resultado','centro de resultado','centro']),
+        cT=col(r0,['tipo de rodado','rodado']), cPr=col(r0,['propriedade']), cUF=col(r0,['uf','estado']), cCar=col(r0,['carroceria']);
+  if(!cP || !cC){ toast('TMS: não achei Placa e/ou Centro de Resultado'); return; }
+  const map={};
+  rows.forEach(row=>{ const pl=placaKey(row[cP]); if(!pl) return;
+    const centro=cC?String(row[cC]).trim():'';
+    map[pl]={ centro, fam:opFamily(centro),
+      rodado:cT?String(row[cT]).trim():'', prop:cPr?String(row[cPr]).trim():'', uf:cUF?String(row[cUF]).trim():'', carroceria:cCar?String(row[cCar]).trim():'' };
+  });
+  TMS=map; TMS_N=Object.keys(map).length;
+  updateDropStatus(); renderAll();
+  toast('TMS ✓ '+TMS_N.toLocaleString('pt-BR')+' veículos');
+}
+// BATIMENTO de operação: placa → UO Trimble (alertas) × centro de resultado (TMS)
+function batimentoRows(){
+  if(!PLACA_UO || !TMS) return null;
+  const rk={divergente:0,nao_op:1,sem_tms:2,ok:3}; const rows=[];
+  Object.keys(PLACA_UO).forEach(pl=>{
+    const t=PLACA_UO[pl]; const famT=opFamily(t.uoCurta); const m=TMS[pl];
+    let status,centro='',famM='';
+    if(!m || !m.centro){ status='sem_tms'; }
+    else { centro=m.centro; famM=m.fam;
+      if(famM==='(não-operacional)') status='nao_op';
+      else if(norm(famM)===norm(famT)) status='ok'; else status='divergente'; }
+    rows.push({placa:pl, uo:t.uoCurta, famT, centro, famM, status, tms:m});
+  });
+  rows.sort((a,b)=> (rk[a.status]-rk[b.status]) || a.placa.localeCompare(b.placa));
+  return rows;
+}
+
 function updateDropStatus(){
-  const set=(id,n,dropId,unit)=>{ $(id).textContent = n? (n.toLocaleString('pt-BR')+' '+(unit||'linhas')+' ✓') : (dropId==='#drop-alertas'?'nenhum arquivo':'nenhum arquivo — usando demonstração'); $(dropId).classList.toggle('loaded',!!n); };
+  const set=(id,n,dropId,unit)=>{ $(id).textContent = n? (n.toLocaleString('pt-BR')+' '+(unit||'linhas')+' ✓') : (['#drop-alertas','#drop-tms'].includes(dropId)?'nenhum arquivo':'nenhum arquivo — usando demonstração'); $(dropId).classList.toggle('loaded',!!n); };
   set('#stPonto', (pending.ponto&&pending.ponto.length)||(RAW&&RAW.counts&&RAW.counts.ponto)||0, '#drop-ponto');
   set('#stMov',   (pending.mov&&pending.mov.length)  ||(RAW&&RAW.counts&&RAW.counts.mov)  ||0, '#drop-mov');
   set('#stAlertas', ALERTS_N||(RAW&&RAW.counts&&RAW.counts.alertas)||0, '#drop-alertas', 'alertas');
+  set('#stTms', TMS_N, '#drop-tms', 'veículos');
 }
 
 /* ============================================================
@@ -1322,6 +1430,7 @@ $('#clearFilters').onclick=()=>{ ['#fOp','#fDia','#fMot','#fStatus'].forEach(s=>
 $$('#tbl thead th').forEach(th=>th.onclick=()=>{ const k=th.dataset.k; SORT.dir = (SORT.k===k)? -SORT.dir : (k==='_sev'?1:1); SORT.k=k; renderTable(filtered()); });
 $('#expCsv').onclick=exportCsv;
 $('#expSemana').onclick=exportSemana;
+$('#expOper').onclick=exportOperacao;
 // config
 function bindCfg(id,key){ const el=$(id); el.value=CFG[key]; el.addEventListener('input',()=>{ CFG[key]=parseFloat(el.value)||0; saveCfg(); build(); fillFilters(); renderAll(); }); }
 bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH');
@@ -1329,12 +1438,13 @@ bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); 
 $('#filePonto').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo jornada…'); readFile(e.target.files[0],rows=>{ pending.ponto=rows; updateDropStatus(); if(pending.mov) ingest(); }); } });
 $('#fileMov').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo movimentação (pode levar alguns segundos)…'); readFile(e.target.files[0],rows=>{ pending.mov=rows; updateDropStatus(); if(pending.ponto) ingest(); else toast('Agora carregue também a jornada (ponto)'); }); } });
 $('#fileAlertas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando alertas (arquivo grande, aguarde)…'); setTimeout(()=>loadAlertas(e.target.files[0]),30); } });
+$('#fileTms').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo TMS…'); readFile(e.target.files[0],rows=>ingestTMS(rows)); } });
 $('#recalc').onclick=()=>{ ingest(); };
-$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
-$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
 
 // INIT
-if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; }
+if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; PLACA_UO=RAW.placaUO||null; }
 build(); fillFilters(); renderAll(); updateDropStatus();
 </script>
 </body>
