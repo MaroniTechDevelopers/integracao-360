@@ -695,10 +695,13 @@ let BASES = {ponto:true, mov:true, trim:true};   // quais das 3 fontes estão ca
 let ALERTS = null;          // agregado de alertas por motorista (norm) — do relatório de alertas
 let TMS = null;             // placa → {centro, operacao} — do relatório do TMS (centro de resultado)
 let ABAST = null;           // motorista(norm) → {km, litros, valor, media, n} — do consolidado de abastecimento (real)
-let META_FAM = null;        // família de operação → meta média (km/l) — do Painel de médias (Telemetria)
+let META_FAM = null;        // família de operação → meta média (km/l) — fallback
+let META_PLACA = null;      // placa → meta (km/l) — meta oficial por veículo (Painel de médias)
 let SORT = { k:'_sev', dir:-1 };
-// meta de média para uma operação (por família; cai na meta única da config se não achar)
+// meta de média por operação (família) — fallback quando não há meta por placa
 function metaDe(operacao){ if(META_FAM){ const f=opFamily(operacao); if(f && META_FAM[f]!=null) return META_FAM[f]; } return CFG.meta; }
+// meta oficial do veículo: por PLACA (exata) > por família de operação > meta única da config
+function metaVeic(placa, operacao){ if(META_PLACA && placa){ const m=META_PLACA[placaKey(placa)]; if(m!=null) return m; } return metaDe(operacao); }
 
 function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
 function saveCfg(){ try{ localStorage.setItem(LS.cfg, JSON.stringify(CFG)); }catch(e){} }
@@ -870,11 +873,11 @@ function semanaAgg(rows){
   const data=ops.map(op=>{
     const opRows=rows.filter(r=>r.operacao===op);
     const mots={};
-    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,dd:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,idDiv:0,pend:0});
-      m.dd+=r.horasDedoDuro; if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0;
+    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,placa:'',dd:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,idDiv:0,pend:0});
+      m.dd+=r.horasDedoDuro; if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0; if(r.placa)m.placa=r.placa;
       m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+r.horasDedoDuro;
       if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; } if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
-    Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaDe(op); m.alertas=d.alertas||{}; m.admissao=d.admissao;
+    Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaVeic(m.placa,op); m.alertas=d.alertas||{}; m.admissao=d.admissao;
       m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.farolUlt=farol(ultima?(m.semanas[ultima]||0):0); });
     return { op, list:Object.values(mots).sort((a,b)=>b.dd-a.dd),
              dd:opRows.reduce((a,r)=>a+r.horasDedoDuro,0),
@@ -1042,7 +1045,7 @@ function renderFicha(){
   const kmR=recs.reduce((a,r)=>a+(r.km||0),0), litrosR=recs.reduce((a,r)=>a+(r.litros||0),0);
   const abF=ABAST&&ABAST[norm(nome)];
   const mediaR = (abF&&abF.media!=null)?abF.media:(litrosR>0?kmR/litrosR:d.media);   // abastecimento real > Trimble > demo
-  const metaFicha = metaDe(recs.length?recs[0].operacao:'');
+  const metaFicha = metaVeic(recs.length?(recs.find(r=>r.placa)||{}).placa:'', recs.length?recs[0].operacao:'');
   const medaOk=mediaR!=null&&mediaR>=metaFicha;
   const reco=recomendacao(tempo,mediaR,totAl,ddTotal);
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
@@ -1201,12 +1204,12 @@ function exportOperacao(){
 function farolMediaVs(m,meta){ if(m==null) return 'verde'; if(m>=meta) return 'verde'; if(m>=meta*0.95) return 'amarelo'; return 'vermelho'; }
 function mediaAgg(rows){
   const mots={};
-  rows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,op:r.operacao,kmT:0,litrosT:0}); m.kmT+=r.km||0; m.litrosT+=r.litros||0; if(r.operacao&&r.operacao!=='—')m.op=r.operacao; });
+  rows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,op:r.operacao,placa:'',kmT:0,litrosT:0}); m.kmT+=r.km||0; m.litrosT+=r.litros||0; if(r.operacao&&r.operacao!=='—')m.op=r.operacao; if(r.placa)m.placa=r.placa; });
   return Object.values(mots).map(m=>{
     const mediaT = m.litrosT>0? m.kmT/m.litrosT : (drv(m.nome).media!=null?drv(m.nome).media:null);
     const ab = ABAST? ABAST[norm(m.nome)] : null;
     const mediaA = ab? ab.media : null;
-    const meta = metaDe(m.op);
+    const meta = metaVeic(m.placa, m.op);
     const oficial = mediaA!=null? mediaA : mediaT;             // abastecimento é a média oficial quando existe
     return {...m, mediaT, mediaA, ab, meta, oficial, diff:(mediaA!=null&&mediaT!=null)?(mediaA-mediaT):null};
   }).filter(m=>m.oficial!=null).sort((a,b)=> (a.oficial-a.meta)-(b.oficial-b.meta));   // pior (mais abaixo da meta) primeiro
@@ -1465,18 +1468,36 @@ function loadAbastecimento(file){
     toast('Abastecimento ✓ '+ABAST_N.toLocaleString('pt-BR')+' motoristas (média real das bombas)');
   });
 }
-// METAS (Painel de médias / Telemetria) → meta média por família de operação
+// METAS (Painel de médias / Telemetria): placa→meta (abas com placa) + família (META GLOBAL, fallback)
+const PLACA_PAT=/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
 function loadMetas(file){
-  loadXlsxSheet(file, ['META GLOBAL','PAINEL DE MEDIAS','PAINEL DE MÉDIAS'], ['operacao','meta'], rows=>{
-    if(!rows||!rows.length){ toast('Metas vazio'); return; }
-    const r0=rows[0]; const cOp=col(r0,['operacao','operação']), cMeta=col(r0,['meta atualizada','meta']);
-    if(!cOp || !cMeta){ toast('Metas: faltam colunas Operação/Meta'); return; }
-    const byf={};
-    rows.forEach(row=>{ const op=row[cOp], mt=numBR(row[cMeta]); if(!op||!(mt>0&&mt<12)) return; const f=opFamily(op); if(f) (byf[f]=byf[f]||[]).push(mt); });
-    const M={}; for(const f in byf) M[f]=byf[f].reduce((a,b)=>a+b,0)/byf[f].length;
-    META_FAM=M; META_N=Object.keys(M).length; updateDropStatus(); renderAll();
-    toast('Metas ✓ '+META_N+' operações (por família)');
-  });
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(ext!=='xlsx' && ext!=='xls'){ toast('Metas: envie o Excel do Painel de médias'); return; }
+  if(typeof XLSX==='undefined'){ toast('Sem internet p/ ler Excel'); return; }
+  const rd=new FileReader();
+  rd.onload=e=>{ try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const placa={}, byf={};
+    wb.SheetNames.forEach(sn=>{
+      const M=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:'',header:1});   // linhas como arrays
+      const nsn=norm(sn);
+      // 1) placa→meta: qualquer célula com placa cujo vizinho à direita é uma meta (0.5–12)
+      M.forEach(r=>{ for(let c=0;c<r.length-1;c++){ const v=norm(r[c]).replace(/[\s-]/g,''); if(PLACA_PAT.test(v)){ const mt=numBR(r[c+1]); if(mt>0.5&&mt<12) placa[v]=mt; } } });
+      // 2) META GLOBAL / PAINEL DE MÉDIAS: OPERAÇÃO + META (por linha) → família
+      if(nsn.indexOf('META GLOBAL')>=0 || nsn.indexOf('PAINEL')>=0){
+        const hdr=(M[0]||[]).map(norm); const iOp=hdr.findIndex(h=>h.indexOf('OPERACAO')>=0);
+        let iMeta=hdr.findIndex(h=>h==='META ATUALIZADA'); if(iMeta<0) iMeta=hdr.findIndex(h=>h==='META');
+        if(iOp>=0 && iMeta>=0) M.slice(1).forEach(r=>{ const op=r[iOp], mt=numBR(r[iMeta]); if(op&&mt>0&&mt<12){ const f=opFamily(op); if(f)(byf[f]=byf[f]||[]).push(mt); } });
+      }
+    });
+    META_PLACA=Object.keys(placa).length?placa:null;
+    META_FAM={}; for(const f in byf) META_FAM[f]=byf[f].reduce((a,b)=>a+b,0)/byf[f].length;
+    if(!Object.keys(META_FAM).length) META_FAM=null;
+    META_N=(META_PLACA?Object.keys(META_PLACA).length:0);
+    updateDropStatus(); renderAll();
+    toast('Metas ✓ '+(META_PLACA?Object.keys(META_PLACA).length+' placas':'')+(META_FAM?' · '+Object.keys(META_FAM).length+' operações':''));
+  }catch(err){ toast('Erro ao ler as metas'); } };
+  rd.readAsArrayBuffer(file);
 }
 function ingestTMS(rows){
   if(!rows||!rows.length){ toast('TMS vazio'); return; }
@@ -1519,7 +1540,7 @@ function updateDropStatus(){
   set('#stAlertas', ALERTS_N||(RAW&&RAW.counts&&RAW.counts.alertas)||0, '#drop-alertas', 'alertas');
   set('#stTms', TMS_N, '#drop-tms', 'veículos');
   set('#stAbast', ABAST_N, '#drop-abast', 'motoristas');
-  set('#stMetas', META_N, '#drop-metas', 'operações', 'nenhum arquivo · meta única '+CFG.meta.toFixed(2).replace('.',','));
+  set('#stMetas', META_N, '#drop-metas', 'metas por placa', 'nenhum arquivo · meta única '+CFG.meta.toFixed(2).replace('.',','));
 }
 
 /* ============================================================
@@ -1590,8 +1611,8 @@ $('#fileTms').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo
 $('#fileAbast').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo abastecimento (arquivo grande, aguarde)…'); setTimeout(()=>loadAbastecimento(e.target.files[0]),30); } });
 $('#fileMetas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo metas…'); loadMetas(e.target.files[0]); } });
 $('#recalc').onclick=()=>{ ingest(); };
-$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
-$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
 
 // INIT
 if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; PLACA_UO=RAW.placaUO||null; }
