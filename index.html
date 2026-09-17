@@ -303,6 +303,7 @@
     <button data-tab="semana" class="active">Resumo semanal</button>
     <button data-tab="linha">Linha do tempo</button>
     <button data-tab="diverg">Divergências <span class="badge" id="badgeDiv">0</span></button>
+    <button data-tab="media">Média</button>
     <button data-tab="tabela">Consolidado</button>
     <button data-tab="operacao">Operação por placa</button>
     <button data-tab="dados">Dados &amp; como usar</button>
@@ -368,6 +369,14 @@
   <section class="view" id="view-diverg">
     <div class="sec-title"><h2>Divergências detectadas</h2><span id="divCount"></span></div>
     <div class="grid" id="divList"></div>
+  </section>
+
+  <!-- ===== MÉDIA (Indicador 4 — km/l da Trimble) ===== -->
+  <section class="view" id="view-media">
+    <div class="grid kpis" id="mediaKpis"></div>
+    <div class="sec-title"><h2>Média por motorista — km/l</h2><span>realizada (km ÷ litros, do relatório de movimentação) × meta</span>
+      <button class="btn" id="expMedia" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
+    <div id="mediaBox"></div>
   </section>
 
   <!-- ===== CONSOLIDADO ===== -->
@@ -448,6 +457,7 @@
         <div class="cf"><label>Movimento mínimo p/ considerar (min)</label><input type="number" id="cfgMovMin" value="5" min="0"></div>
         <div class="cf"><label>Farol amarelo até (min de dedo duro/semana)</label><input type="number" id="cfgFarol" value="60" min="0"></div>
         <div class="cf"><label>Meta de média (km/l)</label><input type="number" id="cfgMeta" value="2.40" min="0" step="0.01"></div>
+        <div class="cf"><label>Preço do litro (R$) — simulação de custo</label><input type="number" id="cfgPreco" value="6.00" min="0" step="0.01"></div>
         <div class="cf"><label>Almoço mínimo — pausa válida (min)</label><input type="number" id="cfgAlmoco" value="30" min="0"></div>
         <div class="cf"><label>Exige pausa acima de (h de jornada)</label><input type="number" id="cfgJornada" value="6" min="0" step="0.5"></div>
       </div>
@@ -636,6 +646,9 @@ const ALERTA_DEF=[
   {k:'velocidade',lab:'Velocidade',ic:'⏱️'}
 ];
 function drv(nome){ return DRIVERS[nome]||{admissao:'',media:null,alertas:{}}; }
+// média real do motorista (km/litros da Trimble, somando os dias); cai no cadastro demo se não houver consumo
+function mediaDe(nome){ let km=0,l=0; for(const r of RECORDS){ if(r.motoristaEscala===nome){ km+=r.km||0; l+=r.litros||0; } } return l>0? km/l : (drv(nome).media!=null?drv(nome).media:null); }
+function mediaTemReal(){ return RECORDS.some(r=>r.litros>0); }
 const NIVEL_DEF=[{k:'ALTO',lab:'Alto',ic:'🔴'},{k:'MEDIO',lab:'Médio',ic:'🟠'},{k:'BAIXO',lab:'Baixo',ic:'🟡'}];
 function tipoLabel(t){ return String(t||'').replace(/_/g,' ').toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase()); }
 function alertasReais(nome){ return ALERTS? (ALERTS[norm(nome)]||null) : null; }
@@ -674,7 +687,7 @@ let ALERTS = null;          // agregado de alertas por motorista (norm) — do r
 let TMS = null;             // placa → {centro, operacao} — do relatório do TMS (centro de resultado)
 let SORT = { k:'_sev', dir:-1 };
 
-function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
+function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
 function saveCfg(){ try{ localStorage.setItem(LS.cfg, JSON.stringify(CFG)); }catch(e){} }
 function loadData(){ try{ const d=JSON.parse(localStorage.getItem(LS.data)||'null'); return (d&&d.records)?d:null; }catch(e){ return null; } }
 function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }catch(e){} }
@@ -689,9 +702,11 @@ function analyze(rec){
   let entrada=punches.length?punches[0]:null, saida=punches.length?punches[punches.length-1]:null;
   let horasPonto=0; for(let i=0;i+1<punches.length;i+=2) horasPonto+=punches[i+1]-punches[i];
   // --- movimentação ---
-  const mov=(rec.movimento||[]).map(s=>({ini:toMin(s.ini),fim:toMin(s.fim),km:+s.km||0,placa:s.placa||''})).filter(s=>s.ini!=null&&s.fim!=null&&s.fim>=s.ini);
+  const mov=(rec.movimento||[]).map(s=>({ini:toMin(s.ini),fim:toMin(s.fim),km:+s.km||0,litros:+s.litros||0,placa:s.placa||''})).filter(s=>s.ini!=null&&s.fim!=null&&s.fim>=s.ini);
   let horasMov=mov.reduce((a,s)=>a+(s.fim-s.ini),0);
   let km=mov.reduce((a,s)=>a+s.km,0);
+  let litros=mov.reduce((a,s)=>a+s.litros,0);
+  let media=litros>0?(km/litros):null;   // média realizada (km/l) da Trimble
   let primMov=mov.length?Math.min(...mov.map(s=>s.ini)):null;
   let ultMov=mov.length?Math.max(...mov.map(s=>s.fim)):null;
   // --- trimble ---
@@ -756,7 +771,7 @@ function analyze(rec){
   }
 
   return Object.assign({}, rec, {
-    punches, entrada, saida, horasPonto, mov, horasMov, km, primMov, ultMov,
+    punches, entrada, saida, horasPonto, mov, horasMov, km, litros, media, primMov, ultMov,
     segs, trimbleMot, semelhanca, foraJornada, horasDedoDuro, flags, sev,
     semana: isoWeek(rec.data), semKey:wi.key, mesKey:wi.mesKey, mesLabel:wi.mesLabel,
     pend: flags.filter(f=>f.sev==='pendente').length,
@@ -811,7 +826,8 @@ function renderKpis(rows){
   const movSemPonto=rows.filter(r=>r.movimento.length>0 && r.punches.length===0).length;
   const pontoSemMov=rows.filter(r=>r.punches.length>0 && r.movimento.length===0).length;
   const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
-  const medFrota=(function(){ const a=motSet.map(m=>drv(m).media).filter(v=>v!=null); return a.length?a.reduce((x,y)=>x+y,0)/a.length:null; })();
+  const medFrota=(function(){ let km=0,l=0; rows.forEach(r=>{km+=r.km||0;l+=r.litros||0;}); if(l>0) return km/l;
+    const a=motSet.map(m=>drv(m).media).filter(v=>v!=null); return a.length?a.reduce((x,y)=>x+y,0)/a.length:null; })();
   let alertKpi=null;
   if(ALERTS){ let tot=0,alto=0; motSet.forEach(m=>{ const a=alertasReais(m); if(a){ tot+=a.total; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto}; }
   const K=[
@@ -840,11 +856,11 @@ function semanaAgg(rows){
   const data=ops.map(op=>{
     const opRows=rows.filter(r=>r.operacao===op);
     const mots={};
-    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,dd:0,dias:0,mov:0,ponto:0,semanas:{},semelSum:0,semelN:0,idDiv:0,pend:0});
-      m.dd+=r.horasDedoDuro; if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto;
+    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,dd:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,idDiv:0,pend:0});
+      m.dd+=r.horasDedoDuro; if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0;
       m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+r.horasDedoDuro;
       if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; } if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
-    Object.values(mots).forEach(m=>{ const d=drv(m.nome); m.media=d.media; m.alertas=d.alertas||{}; m.admissao=d.admissao;
+    Object.values(mots).forEach(m=>{ const d=drv(m.nome); m.media=m.litros>0?(m.km/m.litros):d.media; m.alertas=d.alertas||{}; m.admissao=d.admissao;
       m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.farolUlt=farol(ultima?(m.semanas[ultima]||0):0); });
     return { op, list:Object.values(mots).sort((a,b)=>b.dd-a.dd),
              dd:opRows.reduce((a,r)=>a+r.horasDedoDuro,0),
@@ -1009,8 +1025,10 @@ function renderFicha(){
   const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
   const alR=alertasResumo(nome); const totAl=alR.total;
   const tempo=tempoDeCasa(d.admissao);
-  const medaOk=d.media!=null&&d.media>=CFG.meta;
-  const reco=recomendacao(tempo,d.media,totAl,ddTotal);
+  const kmR=recs.reduce((a,r)=>a+(r.km||0),0), litrosR=recs.reduce((a,r)=>a+(r.litros||0),0);
+  const mediaR = litrosR>0 ? kmR/litrosR : d.media;    // média real (km/l) da Trimble, senão demo
+  const medaOk=mediaR!=null&&mediaR>=CFG.meta;
+  const reco=recomendacao(tempo,mediaR,totAl,ddTotal);
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
 
   // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
@@ -1034,7 +1052,7 @@ function renderFicha(){
 
     <div class="grid kpis" style="margin-bottom:6px">
       <div class="card kpi"><div class="accent" style="background:${medaOk?'var(--good)':'var(--critical)'}"></div>
-        <div class="lab">④ Média realizada</div><div class="val tnum">${d.media!=null?d.media.toFixed(2).replace('.',','):'—'}</div><div class="sub">meta ${CFG.meta.toFixed(2).replace('.',',')} ${d.media!=null?(medaOk?'· acima ✓':'· abaixo'):''}</div></div>
+        <div class="lab">④ Média realizada</div><div class="val tnum">${mediaR!=null?mediaR.toFixed(2).replace('.',','):'—'}</div><div class="sub">${litrosR>0?'km/l · '+Math.round(kmR).toLocaleString('pt-BR')+' km / '+Math.round(litrosR).toLocaleString('pt-BR')+' L':'meta '+CFG.meta.toFixed(2).replace('.',',')}${mediaR!=null?(medaOk?' · acima ✓':' · abaixo da meta'):''}</div></div>
       <div class="card kpi"><div class="accent" style="background:var(--s5)"></div>
         <div class="lab">① Aderência facial</div><div class="val tnum">${semel==null?'—':semel+'<small>%</small>'}</div><div class="sub">semelhança média (câmera)</div></div>
       <div class="card kpi"><div class="accent" style="background:var(--serious)"></div>
@@ -1119,6 +1137,7 @@ function renderAll(){
   renderSemana(rows);
   renderTimelines(rows);
   renderDiverg(rows);
+  renderMedia(rows);
   renderTable(rows);
   renderBatimento();
   const pill=$('#dataModePill'), txt=$('#dataModeTxt');
@@ -1158,6 +1177,53 @@ function exportOperacao(){
   const st={ok:'Bate',divergente:'Divergente',nao_op:'TMS nao-operacional',sem_tms:'Sem centro TMS'};
   rows.forEach(r=>lines.push([r.placa,'"'+(r.uo||'')+'"',r.famT,'"'+(r.centro||'')+'"',r.famM,st[r.status],r.tms?r.tms.rodado:'',r.tms?r.tms.carroceria:'',r.tms?r.tms.prop:'',r.tms?r.tms.uf:''].join(';')));
   baixarCsv(lines,'batimento_operacao_placa.csv');
+}
+
+/* ============================================================
+   RENDER — MÉDIA (Indicador 4)
+   ============================================================ */
+function farolMedia(m){ if(m==null) return 'verde'; if(m>=CFG.meta) return 'verde'; if(m>=CFG.meta*0.95) return 'amarelo'; return 'vermelho'; }
+function mediaAgg(rows){
+  const mots={};
+  rows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,op:r.operacao,km:0,litros:0}); m.km+=r.km||0; m.litros+=r.litros||0; if(r.operacao&&r.operacao!=='—')m.op=r.operacao; });
+  return Object.values(mots).map(m=>({...m, media: m.litros>0? m.km/m.litros : (drv(m.nome).media!=null?drv(m.nome).media:null)}))
+    .filter(m=>m.media!=null).sort((a,b)=>a.media-b.media);
+}
+function renderMedia(rows){
+  const kbox=$('#mediaKpis'), box=$('#mediaBox');
+  const temReal = rows.some(r=>r.litros>0);
+  const list=mediaAgg(rows);
+  const kmT=list.reduce((a,m)=>a+m.km,0), litrosT=list.reduce((a,m)=>a+m.litros,0);
+  const medFrota = litrosT>0? kmT/litrosT : (list.length? list.reduce((a,m)=>a+m.media,0)/list.length : null);
+  const abaixo = list.filter(m=>m.media<CFG.meta).length;
+  const preco=CFG.precoLitro||0, custoReal=litrosT*preco, litrosMeta=CFG.meta>0?kmT/CFG.meta:0, dif=custoReal-litrosMeta*preco;
+  const brl=n=>'R$ '+Math.round(Math.abs(n)).toLocaleString('pt-BR');
+  const K=[
+    {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:'meta '+CFG.meta.toFixed(2).replace('.',','),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--critical)'},
+    {lab:'Abaixo da meta',val:abaixo,sub:'de '+list.length+' motoristas',ac:'var(--warning)'},
+    {lab:'Km rodados',val:Math.round(kmT).toLocaleString('pt-BR'),sub:'no filtro',ac:'var(--s2)'},
+    {lab:'Litros',val:temReal?Math.round(litrosT).toLocaleString('pt-BR'):'—',sub:temReal?'consumidos':'sem consumo na base',ac:'var(--s5)'},
+    {lab:(dif>0?'Custo a mais vs meta':'Economia vs meta'),val:temReal?brl(dif):'—',sub:temReal?('L a '+brl(preco).replace('R$ ','R$ ')+' · '+(dif>0?'gastou acima':'abaixo')+' da meta'):'—',ac:dif>0?'var(--critical)':'var(--good)'},
+  ];
+  kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+  if(!list.length){ box.innerHTML='<div class="empty">Sem média no filtro — a média sai de <b>km ÷ litros</b> do relatório de movimentação (coluna Consumo). Carregue a movimentação e ajuste os filtros.</div>'; return; }
+  box.innerHTML=`<div class="tblwrap"><table style="min-width:720px"><thead><tr>
+      <th>Motorista</th><th>Operação</th><th>Km</th><th>Litros</th><th>Média (km/l)</th><th>vs Meta</th><th>Farol</th></tr></thead><tbody>${
+      list.map(m=>{ const gap=m.media-CFG.meta;
+        return `<tr><td>${m.nome}</td><td>${m.op||'—'}</td><td class="tnum">${Math.round(m.km).toLocaleString('pt-BR')}</td>
+          <td class="tnum">${m.litros>0?Math.round(m.litros).toLocaleString('pt-BR'):'—'}</td>
+          <td class="tnum" style="font-weight:650;color:${m.media>=CFG.meta?'var(--good-ink)':'var(--crit-ink)'}">${m.media.toFixed(2).replace('.',',')}</td>
+          <td class="tnum" style="color:${gap>=0?'var(--good-ink)':'var(--crit-ink)'}">${(gap>=0?'+':'')+gap.toFixed(2).replace('.',',')}</td>
+          <td><span class="fdot" style="background:${FAROL_COR[farolMedia(m.media)]}"></span></td></tr>`;
+      }).join('')
+    }</tbody></table></div>`;
+}
+function exportMedia(){
+  const list=mediaAgg(filtered()); if(!list.length){ toast('Sem média no filtro'); return; }
+  const head=['Motorista','Operacao','Km','Litros','Media_kml','Meta','Gap','Custo_litros_RS'];
+  const lines=[head.join(';')];
+  list.forEach(m=>lines.push([m.nome,m.op||'',Math.round(m.km),Math.round(m.litros),m.media.toFixed(2),CFG.meta.toFixed(2),(m.media-CFG.meta).toFixed(2),(m.litros*(CFG.precoLitro||0)).toFixed(2)].join(';')));
+  baixarCsv(lines,'media_por_motorista.csv');
 }
 
 /* ============================================================
@@ -1275,21 +1341,22 @@ function ingest(){
     const cIni=col(row,['data/hora inicial','inicial','datahora_inicial','inicio','ini']);
     const cFim=col(row,['data/hora final','final','datahora_final','fim']);
     const cP=col(row,['veiculo','placa','patante']); const cKm=col(row,['distancia','km','percorrida']);
+    const cCons=col(row,['consumo','combustivel','litros']);
     const cD=col(row,['data_arquivo','data','dia']);
     const di=cIni?splitDT(row[cIni]):{date:'',time:''}, df=cFim?splitDT(row[cFim]):{date:'',time:''};
     const data=di.date||(cD?isoDate(splitDT(row[cD]).date||row[cD]):''); const ini=toMin(di.time), fim=toMin(df.time);
     if(!data||ini==null||fim==null||fim<ini) return;
     const placa=cP?String(row[cP]).toUpperCase().replace(/\s|-/g,''):'';
     const k=nn+'|'+data; const g=(movRaw[k]=movRaw[k]||{nome,data,segs:[]});
-    g.segs.push({ini,fim,km:cKm?numBR(row[cKm]):0,placa});
+    g.segs.push({ini,fim,km:cKm?numBR(row[cKm]):0,litros:cCons?numBR(row[cCons]):0,placa});
   });
   // merge de segmentos próximos (Trimble fragmenta muito Movimento/Parado)
   const GAP=Math.max(CFG.movMin,10);
   Object.values(movRaw).forEach(g=>{
     g.segs.sort((a,b)=>a.ini-b.ini); const merged=[];
     g.segs.forEach(s=>{ const last=merged[merged.length-1];
-      if(last && s.ini-last.fim<=GAP){ last.fim=Math.max(last.fim,s.fim); last.km+=s.km; if(s.placa&&last.placas.indexOf(s.placa)<0)last.placas.push(s.placa); }
-      else merged.push({ini:s.ini,fim:s.fim,km:s.km,placas:s.placa?[s.placa]:[]}); });
+      if(last && s.ini-last.fim<=GAP){ last.fim=Math.max(last.fim,s.fim); last.km+=s.km; last.litros+=s.litros; if(s.placa&&last.placas.indexOf(s.placa)<0)last.placas.push(s.placa); }
+      else merged.push({ini:s.ini,fim:s.fim,km:s.km,litros:s.litros,placas:s.placa?[s.placa]:[]}); });
     g.merged=merged;
   });
 
@@ -1299,7 +1366,7 @@ function ingest(){
     const sep=k.indexOf('|'), nn=k.slice(0,sep), data=k.slice(sep+1);
     const pp=ponto[k], mm=movRaw[k];
     const nome=(pp&&pp.nome)||(mm&&mm.nome)||nn;
-    const movimento=(mm?mm.merged:[]).map(s=>({ini:hm(s.ini),fim:hm(s.fim),km:s.km,placa:s.placas[0]||''}));
+    const movimento=(mm?mm.merged:[]).map(s=>({ini:hm(s.ini),fim:hm(s.fim),km:s.km,litros:s.litros||0,placa:s.placas[0]||''}));
     const placas=[...new Set((mm?mm.merged:[]).flatMap(s=>s.placas))];
     records.push({ operacao:opBy[nn]||'—', data, placa:placas[0]||'', placas, motoristaEscala:nome,
       ponto: pp?pp.punches.slice():[], movimento, trimble:{segs:[]} });
@@ -1431,9 +1498,10 @@ $$('#tbl thead th').forEach(th=>th.onclick=()=>{ const k=th.dataset.k; SORT.dir 
 $('#expCsv').onclick=exportCsv;
 $('#expSemana').onclick=exportSemana;
 $('#expOper').onclick=exportOperacao;
+$('#expMedia').onclick=exportMedia;
 // config
 function bindCfg(id,key){ const el=$(id); el.value=CFG[key]; el.addEventListener('input',()=>{ CFG[key]=parseFloat(el.value)||0; saveCfg(); build(); fillFilters(); renderAll(); }); }
-bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH');
+bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgPreco','precoLitro'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH');
 // import
 $('#filePonto').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo jornada…'); readFile(e.target.files[0],rows=>{ pending.ponto=rows; updateDropStatus(); if(pending.mov) ingest(); }); } });
 $('#fileMov').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo movimentação (pode levar alguns segundos)…'); readFile(e.target.files[0],rows=>{ pending.mov=rows; updateDropStatus(); if(pending.ponto) ingest(); else toast('Agora carregue também a jornada (ponto)'); }); } });
