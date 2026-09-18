@@ -169,6 +169,13 @@
   .wtl-ruler .tick.day{color:var(--ink-2);font-weight:600}
   .wtl-ruler .tick i{position:absolute;top:13px;left:50%;width:1px;height:6px;background:var(--baseline)}
   .wtl .lane .gl.day{background:var(--baseline);width:2px}
+  /* marcadores de alerta no horário exato (linha do tempo) */
+  .lane.lane-al{height:16px;background:var(--surface-2)}
+  .lane .amark{position:absolute;top:1px;bottom:1px;width:3px;border-radius:2px;transform:translateX(-1.5px);cursor:help;box-shadow:0 0 0 1px var(--surface)}
+  .lane .amark::before{content:"";position:absolute;top:-3px;left:50%;transform:translateX(-50%);border-left:3px solid transparent;border-right:3px solid transparent;border-top:4px solid currentColor}
+  .amark.alto{background:var(--critical);color:var(--critical)}
+  .amark.medio{background:var(--warning);color:var(--warning)}
+  .amark.baixo{background:var(--s2);color:var(--s2)}
   .wtl-hint{font-size:11px;color:var(--muted);margin-top:8px}
   .flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
   .flag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:4px 9px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)}
@@ -363,6 +370,7 @@
         <span class="lg"><span class="sw" style="background:var(--track-mov)"></span> Direção do veículo (com placa)</span>
         <span class="lg"><span class="sw" style="background:transparent;outline:2px dashed var(--serious);outline-offset:-2px"></span> dedo duro (fora do ponto)</span>
         <span class="lg"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 3px,#0000 3px,#0000 6px)"></span> dirigiu no almoço</span>
+        <span class="lg"><span class="sw" style="width:3px;background:var(--critical)"></span> alerta (barra no horário exato): <b style="color:var(--critical)">alto</b>/<b style="color:var(--warning)">médio</b>/<b style="color:var(--s2)">baixo</b></span>
         <span class="lg" style="margin-left:auto;color:var(--muted)">🖱️ scroll = zoom · arraste = navegar</span>
       </div>
     </div>
@@ -595,11 +603,13 @@ function demoRecords(){
 
     { operacao:'Unilever', data:'2026-09-10', placa:'RQK4C23', motoristaEscala:'Antônio Ribeiro',
       ponto:['06:30','15:45'],
+      alertasTimed:[{hora:'08:15',niv:'M',tipo:'EXCESSO_VELOCIDADE'},{hora:'10:40',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'14:05',niv:'B',tipo:'EXCESSO_VELOCIDADE'},{hora:'17:30',niv:'M',tipo:'EXCESSO_VELOCIDADE'}],
       movimento:[{ini:'06:50',fim:'15:20',km:143},{ini:'16:20',fim:'18:40',km:76}],
       trimble:{ segs:[{ini:'06:52',fim:'15:18',motorista:'Antônio Ribeiro',semelhanca:58},{ini:'16:22',fim:'18:38',motorista:'Antônio Ribeiro',semelhanca:61}] } },
 
     { operacao:'Baú', data:'2026-09-10', placa:'FTZ2A88', motoristaEscala:'Rafael Nunes',
       ponto:[],
+      alertasTimed:[{hora:'06:20',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'08:00',niv:'M',tipo:'EXCESSO_VELOCIDADE'},{hora:'11:15',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'12:30',niv:'B',tipo:'EXCESSO_VELOCIDADE'}],
       movimento:[{ini:'05:40',fim:'13:10',km:206}],
       trimble:{ segs:[{ini:'05:44',fim:'13:06',motorista:'Rafael Nunes',semelhanca:90}] } },
 
@@ -620,12 +630,14 @@ function demoRecords(){
 
     { operacao:'Baú', data:'2026-09-11', placa:'FTZ2A88', motoristaEscala:'Rafael Nunes',
       ponto:['05:30','14:00'],
+      alertasTimed:[{hora:'06:10',niv:'M',tipo:'EXCESSO_VELOCIDADE'},{hora:'09:30',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'13:00',niv:'B',tipo:'EXCESSO_VELOCIDADE'}],
       movimento:[{ini:'05:45',fim:'13:40',km:198}],
       trimble:{ segs:[{ini:'05:48',fim:'13:36',motorista:'Rafael Nunes',semelhanca:64}] } },
 
     // marcou almoço (12:00–13:00) mas dirigiu na pausa (12:15–12:50) → "conduziu sem a pausa"
     { operacao:'Bitrem', data:'2026-09-11', placa:'FTZ2B01', motoristaEscala:'Sandro Lima',
       ponto:['06:00','12:00','13:00','16:20'],
+      alertasTimed:[{hora:'07:20',niv:'B',tipo:'EXCESSO_VELOCIDADE'},{hora:'10:05',niv:'M',tipo:'EXCESSO_VELOCIDADE'},{hora:'15:40',niv:'A',tipo:'EXCESSO_VELOCIDADE'}],
       movimento:[{ini:'06:15',fim:'11:55',km:180},{ini:'12:15',fim:'12:50',km:22},{ini:'13:05',fim:'16:10',km:120}],
       trimble:{ segs:[{ini:'06:17',fim:'11:53',motorista:'Sandro Lima',semelhanca:89},{ini:'12:16',fim:'12:49',motorista:'Sandro Lima',semelhanca:87},{ini:'13:07',fim:'16:08',motorista:'Sandro Lima',semelhanca:90}] } },
 
@@ -704,6 +716,16 @@ let REAL = !!RAW;
 let RECORDS = [];           // registros motorista-dia já com análise
 let BASES = {ponto:true, mov:true, trim:true};   // quais das 3 fontes estão carregadas
 let ALERTS = null;          // agregado de alertas por motorista (norm) — do relatório de alertas
+let AL_TL = null;           // motorista(norm) → [ [dataISO, minutos, nivelChar, tipo] ] — horário exato p/ a linha do tempo (só em memória)
+// motoristas presentes nos registros (p/ escopar os alertas da timeline e poupar memória)
+function namesOfInterest(){ const s=new Set(); (RECORDS||[]).forEach(r=>{ if(r.motoristaEscala) s.add(norm(r.motoristaEscala)); }); return s.size?s:null; }
+// alertas com horário de um registro motorista-dia (demo usa r.alertasTimed; real usa AL_TL)
+function alertsForRec(r){
+  if(r.alertasTimed && r.alertasTimed.length) return r.alertasTimed.map(a=>({t:toMin(a.hora),niv:(a.niv||'').toUpperCase()[0]||'',tipo:a.tipo||'ALERTA'})).filter(a=>a.t!=null);
+  if(AL_TL){ const arr=AL_TL[norm(r.motoristaEscala)]; if(arr) return arr.filter(e=>e[0]===r.data).map(e=>({t:e[1],niv:e[2],tipo:e[3]})); }
+  return [];
+}
+function nivName(c){ return c==='A'?'Alto':c==='M'?'Médio':c==='B'?'Baixo':'—'; }
 let TMS = null;             // placa → {centro, operacao} — do relatório do TMS (centro de resultado)
 let ABAST = null;           // motorista(norm) → {km, litros, valor, media, n} — do consolidado de abastecimento (real)
 let META_FAM = null;        // família de operação → meta média (km/l) — fallback
@@ -976,21 +998,23 @@ function buildWeekCards(rows, prefix, cap, showNome){
   const groups=Object.values(grp).sort((a,b)=> a.semKey<b.semKey?1:a.semKey>b.semKey?-1:a.nome.localeCompare(b.nome));
   const shown=groups.slice(0,cap); const ids=[];
   const html=shown.map((g,i)=>{
-    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0; const placas=new Set(), dias=new Set();
+    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0; const placas=new Set(), dias=new Set();
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.semKey))/86400000); const off=dIdx*1440; dias.add(r.data);
       for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
       r.mov.forEach(s=>{ const fora=(r.entrada!=null&&(s.ini<r.entrada-CFG.tol||s.fim>r.saida+CFG.tol)); mov.push({a:off+s.ini,b:off+s.fim,km:s.km,placa:s.placa,fora}); if(s.placa)placas.add(s.placa); km+=s.km||0; });
       (r.almocoDrivenSegs||[]).forEach(s=>almoco.push({a:off+s.ini,b:off+s.fim}));
+      alertsForRec(r).forEach(al=>{ alertas.push({t:off+al.t,niv:al.niv,tipo:al.tipo}); if(al.niv==='A')nAlto++; });
       dd+=r.horasDedoDuro||0; hpon+=r.horasPonto||0; hcond+=r.horasMov||0; hex+=r.horaExtra||0;
     });
-    ZTL[id]={weekStart:g.semKey, ponto, mov, almoco, t0:0, t1:WEEK};
+    ZTL[id]={weekStart:g.semKey, ponto, mov, almoco, alertas, t0:0, t1:WEEK};
     const meta=`<div class="meta">
       <div class="m"><span>Semana</span><b>${g.semana} · ${g.mesLabel}</b></div>
       <div class="m"><span>h ponto</span><b>${hpon?hDec(hpon):'—'}</b></div>
       <div class="m"><span>h condução</span><b style="color:${hcond>hpon+CFG.tol?'var(--serious)':'inherit'}">${hcond?hDec(hcond):'—'}</b></div>
       <div class="m"><span>Hora extra</span><b style="color:${hex>0?'var(--warning)':'inherit'}">${hex>0?hDec(hex):'—'}</b></div>
       <div class="m"><span>Dedo duro</span><b style="color:${dd>0?'var(--serious)':'inherit'}">${dd>0?hDec(dd):'—'}</b></div>
+      ${alertas.length?`<div class="m"><span>Alertas</span><b style="color:${nAlto>0?'var(--critical)':'var(--warning)'}">${alertas.length}${nAlto?' · '+nAlto+' alto':''}</b></div>`:''}
       <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div>
       <div class="m"><span>Veículos</span><b style="color:${placas.size>1?'var(--serious)':'inherit'}">${placas.size||'—'}</b></div></div>`;
     const head = showNome!==false
@@ -1001,6 +1025,7 @@ function buildWeekCards(rows, prefix, cap, showNome){
         <div class="wtl-ruler"></div>
         <div class="track"><span class="tlab">Ponto</span><div class="lane" data-k="ponto"></div></div>
         <div class="track"><span class="tlab">Direção</span><div class="lane" data-k="mov"></div></div>
+        ${alertas.length?`<div class="track"><span class="tlab">Alertas</span><div class="lane lane-al" data-k="alertas"></div></div>`:''}
       </div>
       <div class="wtl-hint">🖱️ role o mouse sobre a linha para <b>zoom</b> (semana → dia → horas) · arraste p/ navegar · duplo-clique reseta</div>
     </div>`;
@@ -1026,6 +1051,8 @@ function renderZoom(id){
   el.querySelector('.wtl-ruler').innerHTML=ruler;
   el.querySelector('.lane[data-k="ponto"]').innerHTML=gl+st.ponto.map(p=>seg('ponto',p[0],p[1],hm(p[0]%1440)+'–'+hm(p[1]%1440))).join('');
   el.querySelector('.lane[data-k="mov"]').innerHTML=gl+st.mov.map(s=>seg('mov',s.a,s.b,(s.placa?s.placa+' · ':'')+hm(s.b-s.a)+(s.km?' · '+Math.round(s.km)+'km':''),s.fora?'fora':'')).join('')+st.almoco.map(s=>seg('almoco',s.a,s.b,'almoço')).join('');
+  const laneAl=el.querySelector('.lane[data-k="alertas"]');
+  if(laneAl){ laneAl.innerHTML=gl+(st.alertas||[]).map(al=>{ const p=pos(al.t); if(p<-1||p>101) return ''; const cls=al.niv==='A'?'alto':al.niv==='M'?'medio':'baixo'; return `<span class="amark ${cls}" style="left:${p}%" title="${hm(al.t%1440)} · ${tipoLabel(al.tipo)} · ${nivName(al.niv)}"></span>`; }).join(''); }
 }
 function setupZoom(id){
   const el=document.getElementById(id); if(!el) return; renderZoom(id);
@@ -1394,14 +1421,14 @@ function parseCSV(text){
   return lines.slice(1).map(l=>{ const c=splitCSVLine(l,delim); const o={}; head.forEach((h,i)=>o[h]=c[i]!=null?c[i]:''); return o; });
 }
 // AGREGA o relatório de alertas em streaming (não guarda as ~337 mil linhas)
-function aggAlertas(text){
-  text=text.replace(/^﻿/,''); const nl=text.indexOf('\n'); if(nl<0) return {A:{},n:0};
+function aggAlertas(text, keep){
+  text=text.replace(/^﻿/,''); const nl=text.indexOf('\n'); if(nl<0) return {A:{},n:0,tl:{}};
   const first=text.slice(0,nl).replace(/\r$/,'');
   const delim=(first.match(/;/g)||[]).length>=(first.match(/,/g)||[]).length?';':',';
   const head=splitCSVLine(first,delim); const H={}; head.forEach((h,i)=>H[norm(h)]=i);
   const find=(...ns)=>{ for(const n of ns){ for(const k in H){ if(k.indexOf(n)>=0) return H[k]; } } return -1; };
-  const iMot=find('MOTORISTA'), iTipo=find('TIPO'), iNivel=find('NIVEL'), iData=find('DATA'), iDesc=find('DESCONSIDERADO'), iUO=find('UO'), iPlaca=find('PLACA','VEICULO');
-  const A={}; const puo={}; let n=0, start=nl+1;
+  const iMot=find('MOTORISTA'), iTipo=find('TIPO'), iNivel=find('NIVEL'), iData=find('DATA'), iHora=find('HORA'), iDesc=find('DESCONSIDERADO'), iUO=find('UO'), iPlaca=find('PLACA','VEICULO');
+  const A={}; const puo={}; const tl={}; let n=0, start=nl+1;   // tl: motorista(norm) → [ [dataISO, minutos, nivelChar, tipo] ] p/ a linha do tempo
   while(start<text.length){
     let end=text.indexOf('\n',start); if(end<0) end=text.length;
     const line=text.slice(start, text.charCodeAt(end-1)===13?end-1:end); start=end+1;
@@ -1414,12 +1441,19 @@ function aggAlertas(text){
     const tipo=((c[iTipo]||'').trim()||'ALERTA'), nivel=norm(c[iNivel]||'');
     const a=(A[nn]=A[nn]||{nome, total:0, niveis:{}, tipos:{}, semanas:{}});
     a.total++; a.tipos[tipo]=(a.tipos[tipo]||0)+1; if(nivel)a.niveis[nivel]=(a.niveis[nivel]||0)+1;
-    if(iData>=0){ const d=isoDate(splitDT(c[iData]).date||c[iData]); if(d){ const wk=weekInfo(d).key; if(wk)a.semanas[wk]=(a.semanas[wk]||0)+1; } }
+    let d=null;
+    if(iData>=0){ d=isoDate(splitDT(c[iData]).date||c[iData]); if(d){ const wk=weekInfo(d).key; if(wk)a.semanas[wk]=(a.semanas[wk]||0)+1; } }
+    // horário exato do alerta → linha do tempo (só p/ motoristas de interesse; controla memória)
+    if(d && (!keep || keep.has(nn))){
+      let tmin = iHora>=0 ? toMin(c[iHora]) : null;
+      if(tmin==null){ const dt=splitDT(c[iData]); if(dt.time) tmin=toMin(dt.time); }
+      if(tmin!=null){ const arr=(tl[nn]=tl[nn]||[]); if(arr.length<5000) arr.push([d,tmin,(nivel[0]||''),tipo]); }
+    }
     n++;
   }
   // UO predominante por placa
   const placaUO={}; for(const pl in puo){ let best=-1,uo=''; for(const u in puo[pl]){ if(puo[pl][u]>best){best=puo[pl][u];uo=u;} } placaUO[pl]={uo, uoCurta:uoCurta(uo), n:best}; }
-  return {A,n,placaUO};
+  return {A,n,placaUO,tl};
 }
 function placaKey(v){ return String(v||'').toUpperCase().replace(/[\s-]/g,''); }
 // nome curto da operação a partir da UO da Trimble ("TRANSMARONI - OPERAÇÃO FRIGO" → "FRIGO")
@@ -1547,10 +1581,11 @@ let ALERTS_N=0, PLACA_UO=null;   // PLACA_UO: placa → {uo, uoCurta} (UO Trimbl
 function loadAlertas(file){
   const ext=(file.name.split('.').pop()||'').toLowerCase();
   const done=(text)=>{ try{
-      const r=aggAlertas(text); ALERTS=r.A; ALERTS_N=r.n; PLACA_UO=r.placaUO||{};
+      const r=aggAlertas(text, namesOfInterest()); ALERTS=r.A; ALERTS_N=r.n; PLACA_UO=r.placaUO||{}; AL_TL=r.tl||{};
       if(REAL && RAW){ RAW.alertas=ALERTS; RAW.placaUO=PLACA_UO; RAW.counts=RAW.counts||{}; RAW.counts.alertas=r.n; saveData(); }
       updateDropStatus(); renderAll();
-      toast('Alertas ✓ '+r.n.toLocaleString('pt-BR')+' eventos · '+Object.keys(r.A).length+' motoristas · '+Object.keys(PLACA_UO).length+' placas c/ UO');
+      const nTl=Object.values(AL_TL).reduce((a,x)=>a+x.length,0);
+      toast('Alertas ✓ '+r.n.toLocaleString('pt-BR')+' eventos · '+Object.keys(r.A).length+' motoristas · '+nTl.toLocaleString('pt-BR')+' na linha do tempo');
     }catch(err){ toast('Erro ao processar alertas'); } };
   const rd=new FileReader();
   if(ext==='zip'){
