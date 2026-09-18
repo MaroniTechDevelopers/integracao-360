@@ -702,6 +702,11 @@ let SORT = { k:'_sev', dir:-1 };
 function metaDe(operacao){ if(META_FAM){ const f=opFamily(operacao); if(f && META_FAM[f]!=null) return META_FAM[f]; } return CFG.meta; }
 // meta oficial do veículo: por PLACA (exata) > por família de operação > meta única da config
 function metaVeic(placa, operacao){ if(META_PLACA && placa){ const m=META_PLACA[placaKey(placa)]; if(m!=null) return m; } return metaDe(operacao); }
+// operação de um veículo pela placa — usada quando a jornada não traz o departamento
+function operacaoDaPlaca(placa){ if(!placa) return '';
+  if(typeof PLACA_UO!=='undefined' && PLACA_UO){ const u=PLACA_UO[placaKey(placa)]; if(u&&u.uoCurta) return u.uoCurta; }
+  if(typeof TMS!=='undefined' && TMS){ const t=TMS[placaKey(placa)]; if(t&&t.fam && t.fam!=='(não-operacional)') return t.fam; }
+  return ''; }
 
 function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
 function saveCfg(){ try{ localStorage.setItem(LS.cfg, JSON.stringify(CFG)); }catch(e){} }
@@ -713,6 +718,8 @@ function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }c
    ============================================================ */
 function analyze(rec){
   const tol=CFG.tol, movMin=CFG.movMin;
+  // operação: da jornada; se vazia, deduz pela placa (alertas/TMS) — recalcula quando essas bases chegam
+  const operacao = (rec.operacao && rec.operacao!=='—') ? rec.operacao : (operacaoDaPlaca(rec.placa||(rec.placas&&rec.placas[0]))||'—');
   // --- ponto: intervalos trabalhados = pares consecutivos ---
   const punches=(rec.ponto||[]).map(toMin).filter(v=>v!=null).sort((a,b)=>a-b);
   let entrada=punches.length?punches[0]:null, saida=punches.length?punches[punches.length-1]:null;
@@ -787,6 +794,7 @@ function analyze(rec){
   }
 
   return Object.assign({}, rec, {
+    operacao,
     punches, entrada, saida, horasPonto, mov, horasMov, km, litros, media, primMov, ultMov,
     segs, trimbleMot, semelhanca, foraJornada, horasDedoDuro, flags, sev,
     semana: isoWeek(rec.data), semKey:wi.key, mesKey:wi.mesKey, mesLabel:wi.mesLabel,
@@ -795,7 +803,7 @@ function analyze(rec){
     movAusente: BASES.mov && mov.length===0,
     idAusente: BASES.trim && semSegs,
     idDivergente: flags.some(f=>f.t.startsWith('Identificação divergente')),
-    _key: rec.operacao+'|'+rec.data+'|'+rec.placa+'|'+rec.motoristaEscala
+    _key: operacao+'|'+rec.data+'|'+rec.placa+'|'+rec.motoristaEscala
   });
 }
 
@@ -1403,7 +1411,7 @@ function finalizeRecords(jor, movRaw, movRows, pontoRows){
     const nome=(pp&&pp.nome)||(mm&&mm.nome)||nn;
     const movimento=(mm?mm.merged:[]).map(s=>({ini:hm(s.ini),fim:hm(s.fim),km:s.km,litros:s.litros||0,placa:s.placas[0]||''}));
     const placas=[...new Set((mm?mm.merged:[]).flatMap(s=>s.placas))];
-    records.push({ operacao:opBy[nn]||'—', data, placa:placas[0]||'', placas, motoristaEscala:nome,
+    records.push({ operacao:(opBy[nn]||''), data, placa:placas[0]||'', placas, motoristaEscala:nome,
       ponto: pp?pp.punches.slice():[], movimento, trimble:{segs:[]} });
   });
   if(!records.length){ toast('Não consegui cruzar — confira as colunas na aba Dados'); return; }
