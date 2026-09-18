@@ -160,6 +160,16 @@
   .seg.fora{outline:2px dashed var(--serious);outline-offset:-2px}
   .seg.almoco{background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 4px,color-mix(in srgb,var(--critical) 60%,#000) 4px,color-mix(in srgb,var(--critical) 60%,#000) 8px);color:#fff}
   .lane-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--muted);font-style:italic;letter-spacing:.02em}
+  /* ===== linha do tempo SEMANAL com zoom ===== */
+  .wtl-card{padding:14px 16px 10px}
+  .wtl{position:relative;margin-top:8px;cursor:grab;user-select:none;overscroll-behavior:contain}
+  .wtl.grabbing{cursor:grabbing}
+  .wtl-ruler{position:relative;height:15px;margin:0 0 3px 84px}
+  .wtl-ruler .tick{position:absolute;top:0;transform:translateX(-50%);font-size:9.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .wtl-ruler .tick.day{color:var(--ink-2);font-weight:600}
+  .wtl-ruler .tick i{position:absolute;top:13px;left:50%;width:1px;height:6px;background:var(--baseline)}
+  .wtl .lane .gl.day{background:var(--baseline);width:2px}
+  .wtl-hint{font-size:11px;color:var(--muted);margin-top:8px}
   .flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
   .flag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:4px 9px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)}
   .flag .fi{width:7px;height:7px;border-radius:50%}
@@ -346,15 +356,14 @@
 
   <!-- ===== LINHA DO TEMPO ===== -->
   <section class="view" id="view-linha">
-    <div class="sec-title"><h2>Linha do tempo por motorista/dia</h2><span>a evidência: as três fontes sobrepostas na mesma escala de horas</span></div>
+    <div class="sec-title"><h2>Linha do tempo semanal</h2><span>por motorista · a semana inteira · role o mouse para dar zoom (semana → dia → horas)</span></div>
     <div class="card" style="padding:12px 16px">
       <div class="legend">
-        <span class="lg"><span class="sw" style="background:var(--track-ponto)"></span> Folha de ponto (jornada)</span>
-        <span class="lg"><span class="sw" style="background:var(--track-mov)"></span> Movimentação do veículo</span>
-        <span class="lg"><span class="sw" style="background:var(--track-id-ok)"></span> Trimble — motorista confere</span>
-        <span class="lg"><span class="sw" style="background:var(--track-id-bad)"></span> Trimble — motorista divergente</span>
+        <span class="lg"><span class="sw" style="background:var(--track-ponto)"></span> Ponto (jornada)</span>
+        <span class="lg"><span class="sw" style="background:var(--track-mov)"></span> Direção do veículo (com placa)</span>
         <span class="lg"><span class="sw" style="background:transparent;outline:2px dashed var(--serious);outline-offset:-2px"></span> dedo duro (fora do ponto)</span>
         <span class="lg"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 3px,#0000 3px,#0000 6px)"></span> dirigiu no almoço</span>
+        <span class="lg" style="margin-left:auto;color:var(--muted)">🖱️ scroll = zoom · arraste = navegar</span>
       </div>
     </div>
     <div class="grid" id="timelines" style="margin-top:12px"></div>
@@ -948,11 +957,72 @@ function tlWindow(rows){
 function pos(min,w){ return ((min-w.lo)/(w.hi-w.lo))*100; }
 function seg(cls,ini,fim,w,label,extra){ const l=pos(ini,w), r=pos(fim,w); return `<div class="seg ${cls} ${extra||''}" style="left:${l}%;width:${Math.max(r-l,0.4)}%" title="${label||''}">${label||''}</div>`; }
 
+// ===== LINHA DO TEMPO SEMANAL com ZOOM (semana → dia → horas) =====
+const ZTL={}; const WEEK=7*1440; let _ztlWired=false, _ztlDrag=null;
+function fmtDay(weekStart, dIdx){ const d=new Date(Date.parse(weekStart)+dIdx*86400000); return String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0'); }
 function renderTimelines(rows){
-  const box=$('#timelines'); const CAP=120;
-  const shown=rows.slice(0,CAP);
-  box.innerHTML = (timelinesHTML(shown) || '<div class="empty">Nenhum registro para o filtro atual.</div>')
-    + (rows.length>CAP?`<div class="empty">Mostrando ${CAP} de ${rows.length.toLocaleString('pt-BR')} — use os filtros (motorista, dia, operação) para focar a evidência.</div>`:'');
+  const box=$('#timelines');
+  if(!rows.length){ box.innerHTML='<div class="empty">Nenhum registro para o filtro atual.</div>'; for(const k in ZTL) delete ZTL[k]; return; }
+  const grp={};
+  rows.forEach(r=>{ const k=r.motoristaEscala+'|'+r.semKey; const g=(grp[k]=grp[k]||{nome:r.motoristaEscala,semKey:r.semKey,semana:r.semana,mesLabel:r.mesLabel,recs:[]}); g.recs.push(r); });
+  const groups=Object.values(grp).sort((a,b)=> a.semKey<b.semKey?1:a.semKey>b.semKey?-1:a.nome.localeCompare(b.nome));
+  const CAP=30, shown=groups.slice(0,CAP);
+  for(const k in ZTL) delete ZTL[k];
+  box.innerHTML = shown.map((g,i)=>{
+    const id='ztl'+i; const ponto=[],mov=[],almoco=[]; let dd=0,km=0; const placas=new Set(), dias=new Set();
+    g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.semKey))/86400000); const off=dIdx*1440; dias.add(r.data);
+      for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
+      if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
+      r.mov.forEach(s=>{ const fora=(r.entrada!=null&&(s.ini<r.entrada-CFG.tol||s.fim>r.saida+CFG.tol)); mov.push({a:off+s.ini,b:off+s.fim,km:s.km,placa:s.placa,fora}); if(s.placa)placas.add(s.placa); km+=s.km||0; });
+      (r.almocoDrivenSegs||[]).forEach(s=>almoco.push({a:off+s.ini,b:off+s.fim}));
+      dd+=r.horasDedoDuro||0;
+    });
+    ZTL[id]={weekStart:g.semKey, ponto, mov, almoco, t0:0, t1:WEEK};
+    const meta=`<div class="meta">
+      <div class="m"><span>Semana</span><b>${g.semana} · ${g.mesLabel}</b></div>
+      <div class="m"><span>Dedo duro</span><b style="color:${dd>0?'var(--serious)':'inherit'}">${dd>0?hDec(dd):'—'}</b></div>
+      <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div>
+      <div class="m"><span>Veículos</span><b style="color:${placas.size>1?'var(--serious)':'inherit'}">${placas.size||'—'}</b></div></div>`;
+    return `<div class="card wtl-card">
+      <div class="tl-head"><div class="who"><b>${g.nome}</b><small>${[...placas].join(', ')||'—'}</small></div>${meta}</div>
+      <div class="wtl" id="${id}">
+        <div class="wtl-ruler"></div>
+        <div class="track"><span class="tlab">Ponto</span><div class="lane" data-k="ponto"></div></div>
+        <div class="track"><span class="tlab">Direção</span><div class="lane" data-k="mov"></div></div>
+      </div>
+      <div class="wtl-hint">🖱️ role o mouse sobre a linha para <b>zoom</b> (semana → dia → horas) · arraste p/ navegar · duplo-clique reseta</div>
+    </div>`;
+  }).join('') + (groups.length>CAP?`<div class="empty">Mostrando ${CAP} de ${groups.length} semanas-motorista — filtre por motorista/semana.</div>`:'');
+  shown.forEach((g,i)=>setupZoom('ztl'+i));
+  wireZtlDrag();
+}
+function renderZoom(id){
+  const st=ZTL[id], el=document.getElementById(id); if(!st||!el) return;
+  const span=st.t1-st.t0, pos=t=>((t-st.t0)/span)*100;
+  let step, dayMode; if(span>3*1440){step=1440;dayMode=true;} else if(span>12*60){step=360;} else if(span>3*60){step=60;} else {step=30;}
+  let ruler='', gl=''; const start=Math.ceil(st.t0/step)*step;
+  for(let t=start;t<=st.t1+1;t+=step){ const p=pos(t); if(p<-2||p>102) continue; const dIdx=Math.floor(t/1440), mod=((t%1440)+1440)%1440, day=mod===0;
+    const lab = dayMode? fmtDay(st.weekStart,dIdx) : ((day?fmtDay(st.weekStart,dIdx)+' ':'')+hm(mod));
+    ruler+=`<span class="tick ${day?'day':''}" style="left:${p}%">${lab}<i></i></span>`;
+    gl+=`<div class="gl ${t%1440===0?'day':''}" style="left:${p}%"></div>`; }
+  const seg=(cls,a,b,lab,extra)=>{ const l=pos(a),r=pos(b); if(r<0||l>100) return ''; const L=Math.max(l,0),W=Math.max(Math.min(r,100)-L,0.3); return `<div class="seg ${cls} ${extra||''}" style="left:${L}%;width:${W}%" title="${lab||''}">${(r-l)>4?(lab||''):''}</div>`; };
+  el.querySelector('.wtl-ruler').innerHTML=ruler;
+  el.querySelector('.lane[data-k="ponto"]').innerHTML=gl+st.ponto.map(p=>seg('ponto',p[0],p[1],hm(p[0]%1440)+'–'+hm(p[1]%1440))).join('');
+  el.querySelector('.lane[data-k="mov"]').innerHTML=gl+st.mov.map(s=>seg('mov',s.a,s.b,(s.placa?s.placa+' · ':'')+(s.km?Math.round(s.km)+'km':''),s.fora?'fora':'')).join('')+st.almoco.map(s=>seg('almoco',s.a,s.b,'almoço')).join('');
+}
+function setupZoom(id){
+  const el=document.getElementById(id); if(!el) return; renderZoom(id);
+  el.addEventListener('wheel',e=>{ e.preventDefault(); const st=ZTL[id]; const lane=el.querySelector('.lane'); const rect=lane.getBoundingClientRect();
+    let fx=(e.clientX-rect.left)/rect.width; fx=Math.max(0,Math.min(1,fx)); const span=st.t1-st.t0; const cur=st.t0+fx*span;
+    let ns=span*(e.deltaY<0?0.82:1.22); ns=Math.max(90,Math.min(WEEK,ns)); let t0=cur-fx*ns,t1=t0+ns;
+    if(t0<0){t0=0;t1=ns;} if(t1>WEEK){t1=WEEK;t0=t1-ns;} if(t0<0)t0=0; st.t0=t0; st.t1=t1; renderZoom(id);
+  },{passive:false});
+  el.addEventListener('mousedown',e=>{ const st=ZTL[id]; _ztlDrag={id,x:e.clientX,t0:st.t0,t1:st.t1,w:el.querySelector('.lane').getBoundingClientRect().width}; el.classList.add('grabbing'); });
+  el.addEventListener('dblclick',()=>{ const st=ZTL[id]; st.t0=0; st.t1=WEEK; renderZoom(id); });
+}
+function wireZtlDrag(){ if(_ztlWired) return; _ztlWired=true;
+  window.addEventListener('mousemove',e=>{ if(!_ztlDrag) return; const d=_ztlDrag, st=ZTL[d.id]; if(!st) return; const span=d.t1-d.t0; let dt=-(e.clientX-d.x)/d.w*span; let t0=d.t0+dt,t1=d.t1+dt; if(t0<0){t0=0;t1=span;} if(t1>WEEK){t1=WEEK;t0=t1-span;} st.t0=t0;st.t1=t1; renderZoom(d.id); });
+  window.addEventListener('mouseup',()=>{ if(_ztlDrag){ const el=document.getElementById(_ztlDrag.id); if(el)el.classList.remove('grabbing'); _ztlDrag=null; } });
 }
 function timelinesHTML(rows){
   if(!rows.length){ return ''; }
