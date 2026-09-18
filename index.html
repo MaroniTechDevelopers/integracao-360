@@ -960,16 +960,15 @@ function seg(cls,ini,fim,w,label,extra){ const l=pos(ini,w), r=pos(fim,w); retur
 // ===== LINHA DO TEMPO SEMANAL com ZOOM (semana → dia → horas) =====
 const ZTL={}; const WEEK=7*1440; let _ztlWired=false, _ztlDrag=null;
 function fmtDay(weekStart, dIdx){ const d=new Date(Date.parse(weekStart)+dIdx*86400000); return String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0'); }
-function renderTimelines(rows){
-  const box=$('#timelines');
-  if(!rows.length){ box.innerHTML='<div class="empty">Nenhum registro para o filtro atual.</div>'; for(const k in ZTL) delete ZTL[k]; return; }
+// monta os cards semanais (agrupa por motorista+semana), registra o estado de zoom e devolve {html, ids}
+function buildWeekCards(rows, prefix, cap, showNome){
+  for(const k in ZTL) if(k.indexOf(prefix)===0) delete ZTL[k];
   const grp={};
   rows.forEach(r=>{ const k=r.motoristaEscala+'|'+r.semKey; const g=(grp[k]=grp[k]||{nome:r.motoristaEscala,semKey:r.semKey,semana:r.semana,mesLabel:r.mesLabel,recs:[]}); g.recs.push(r); });
   const groups=Object.values(grp).sort((a,b)=> a.semKey<b.semKey?1:a.semKey>b.semKey?-1:a.nome.localeCompare(b.nome));
-  const CAP=30, shown=groups.slice(0,CAP);
-  for(const k in ZTL) delete ZTL[k];
-  box.innerHTML = shown.map((g,i)=>{
-    const id='ztl'+i; const ponto=[],mov=[],almoco=[]; let dd=0,km=0; const placas=new Set(), dias=new Set();
+  const shown=groups.slice(0,cap); const ids=[];
+  const html=shown.map((g,i)=>{
+    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[]; let dd=0,km=0; const placas=new Set(), dias=new Set();
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.semKey))/86400000); const off=dIdx*1440; dias.add(r.data);
       for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
@@ -983,8 +982,10 @@ function renderTimelines(rows){
       <div class="m"><span>Dedo duro</span><b style="color:${dd>0?'var(--serious)':'inherit'}">${dd>0?hDec(dd):'—'}</b></div>
       <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div>
       <div class="m"><span>Veículos</span><b style="color:${placas.size>1?'var(--serious)':'inherit'}">${placas.size||'—'}</b></div></div>`;
-    return `<div class="card wtl-card">
-      <div class="tl-head"><div class="who"><b>${g.nome}</b><small>${[...placas].join(', ')||'—'}</small></div>${meta}</div>
+    const head = showNome!==false
+      ? `<div class="tl-head"><div class="who"><b>${g.nome}</b><small>${[...placas].join(', ')||'—'}</small></div>${meta}</div>`
+      : `<div class="tl-head"><div class="who"><b>${g.semana} · ${g.mesLabel}</b><small>${[...placas].join(', ')||'—'}</small></div>${meta}</div>`;
+    return `<div class="card wtl-card">${head}
       <div class="wtl" id="${id}">
         <div class="wtl-ruler"></div>
         <div class="track"><span class="tlab">Ponto</span><div class="lane" data-k="ponto"></div></div>
@@ -992,9 +993,14 @@ function renderTimelines(rows){
       </div>
       <div class="wtl-hint">🖱️ role o mouse sobre a linha para <b>zoom</b> (semana → dia → horas) · arraste p/ navegar · duplo-clique reseta</div>
     </div>`;
-  }).join('') + (groups.length>CAP?`<div class="empty">Mostrando ${CAP} de ${groups.length} semanas-motorista — filtre por motorista/semana.</div>`:'');
-  shown.forEach((g,i)=>setupZoom('ztl'+i));
-  wireZtlDrag();
+  }).join('') + (groups.length>cap?`<div class="empty">Mostrando ${cap} de ${groups.length} semanas — filtre para focar.</div>`:'');
+  return {html, ids};
+}
+function renderTimelines(rows){
+  const box=$('#timelines');
+  if(!rows.length){ box.innerHTML='<div class="empty">Nenhum registro para o filtro atual.</div>'; for(const k in ZTL) if(k.indexOf('ztl')===0) delete ZTL[k]; return; }
+  const {html,ids}=buildWeekCards(rows,'ztl',30,true);
+  box.innerHTML=html; ids.forEach(setupZoom); wireZtlDrag();
 }
 function renderZoom(id){
   const st=ZTL[id], el=document.getElementById(id); if(!st||!el) return;
@@ -1118,6 +1124,7 @@ function renderFicha(){
   const semel=semArr.length?Math.round(semArr.reduce((a,b)=>a+b,0)/semArr.length):null;
   const op=[...new Set(recs.map(r=>r.operacao))].join(', ');
   const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
+  const wk=buildWeekCards(recs,'fztl',12,false);   // evidência semanal com zoom
   const alR=alertasResumo(nome); const totAl=alR.total;
   const tempo=tempoDeCasa(d.admissao);
   const kmR=recs.reduce((a,r)=>a+(r.km||0),0), litrosR=recs.reduce((a,r)=>a+(r.litros||0),0);
@@ -1164,9 +1171,10 @@ function renderFicha(){
     <div class="sec-title"><h2>Farol semanal — dedo duro</h2><span>semanas agrupadas por mês</span></div>
     <div class="card">${strip}</div>
 
-    <div class="sec-title"><h2>Evidência — Ponto × Movimento × Trimble</h2><span>os dias que compõem o dedo duro deste motorista</span></div>
-    <div class="grid">${ timelinesHTML(recs) || '<div class="empty">Sem dias no filtro.</div>' }</div>
+    <div class="sec-title"><h2>Evidência semanal — Ponto × Movimento</h2><span>a semana inteira · role o mouse para dar zoom (semana → dia → horas)</span></div>
+    <div class="grid">${ wk.html || '<div class="empty">Sem dias.</div>' }</div>
   `;
+  wk.ids.forEach(setupZoom); wireZtlDrag();
 }
 
 /* ============================================================
