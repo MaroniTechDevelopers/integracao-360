@@ -169,13 +169,14 @@
   .wtl-ruler .tick.day{color:var(--ink-2);font-weight:600}
   .wtl-ruler .tick i{position:absolute;top:13px;left:50%;width:1px;height:6px;background:var(--baseline)}
   .wtl .lane .gl.day{background:var(--baseline);width:2px}
-  /* marcadores de alerta no horário exato (linha do tempo) */
-  .lane.lane-al{height:16px;background:var(--surface-2)}
-  .lane .amark{position:absolute;top:1px;bottom:1px;width:3px;border-radius:2px;transform:translateX(-1.5px);cursor:help;box-shadow:0 0 0 1px var(--surface)}
-  .lane .amark::before{content:"";position:absolute;top:-3px;left:50%;transform:translateX(-50%);border-left:3px solid transparent;border-right:3px solid transparent;border-top:4px solid currentColor}
-  .amark.alto{background:var(--critical);color:var(--critical)}
-  .amark.medio{background:var(--warning);color:var(--warning)}
-  .amark.baixo{background:var(--s2);color:var(--s2)}
+  /* marcadores de alerta no horário exato (linha do tempo) — ícone por tipo + haste por severidade */
+  .lane.lane-al{height:24px;background:var(--surface-2);overflow:visible}
+  .lane .amark{position:absolute;top:13px;bottom:0;width:2px;transform:translateX(-1px);cursor:help;border-radius:1px}
+  .amark.alto{background:var(--critical)}
+  .amark.medio{background:var(--warning)}
+  .amark.baixo{background:var(--s2)}
+  .amark i{position:absolute;top:-13px;left:50%;transform:translateX(-50%);font-size:12px;font-style:normal;line-height:1;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
+  .amark.alto i{filter:drop-shadow(0 0 3px var(--critical))}
   .wtl-hint{font-size:11px;color:var(--muted);margin-top:8px}
   .flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
   .flag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:4px 9px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)}
@@ -370,7 +371,7 @@
         <span class="lg"><span class="sw" style="background:var(--track-mov)"></span> Direção do veículo (com placa)</span>
         <span class="lg"><span class="sw" style="background:transparent;outline:2px dashed var(--serious);outline-offset:-2px"></span> dedo duro (fora do ponto)</span>
         <span class="lg"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 3px,#0000 3px,#0000 6px)"></span> dirigiu no almoço</span>
-        <span class="lg"><span class="sw" style="width:3px;background:var(--critical)"></span> alerta (barra no horário exato): <b style="color:var(--critical)">alto</b>/<b style="color:var(--warning)">médio</b>/<b style="color:var(--s2)">baixo</b></span>
+        <span class="lg">alertas no horário: 📱 celular · ⏱️ velocidade · 😴 fadiga · 👁️ distração · 🔒 cinto — haste por severidade <b style="color:var(--critical)">alto</b>/<b style="color:var(--warning)">médio</b>/<b style="color:var(--s2)">baixo</b></span>
         <span class="lg" style="margin-left:auto;color:var(--muted)">🖱️ scroll = zoom · arraste = navegar</span>
       </div>
     </div>
@@ -603,13 +604,13 @@ function demoRecords(){
 
     { operacao:'Unilever', data:'2026-09-10', placa:'RQK4C23', motoristaEscala:'Antônio Ribeiro',
       ponto:['06:30','15:45'],
-      alertasTimed:[{hora:'08:15',niv:'M',tipo:'EXCESSO_VELOCIDADE'},{hora:'10:40',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'14:05',niv:'B',tipo:'EXCESSO_VELOCIDADE'},{hora:'17:30',niv:'M',tipo:'EXCESSO_VELOCIDADE'}],
+      alertasTimed:[{hora:'08:15',niv:'M',tipo:'CELULAR'},{hora:'10:40',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'14:05',niv:'B',tipo:'CINTO'},{hora:'17:30',niv:'M',tipo:'FADIGA'}],
       movimento:[{ini:'06:50',fim:'15:20',km:143},{ini:'16:20',fim:'18:40',km:76}],
       trimble:{ segs:[{ini:'06:52',fim:'15:18',motorista:'Antônio Ribeiro',semelhanca:58},{ini:'16:22',fim:'18:38',motorista:'Antônio Ribeiro',semelhanca:61}] } },
 
     { operacao:'Baú', data:'2026-09-10', placa:'FTZ2A88', motoristaEscala:'Rafael Nunes',
       ponto:[],
-      alertasTimed:[{hora:'06:20',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'08:00',niv:'M',tipo:'EXCESSO_VELOCIDADE'},{hora:'11:15',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'12:30',niv:'B',tipo:'EXCESSO_VELOCIDADE'}],
+      alertasTimed:[{hora:'06:20',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'08:00',niv:'M',tipo:'CELULAR'},{hora:'11:15',niv:'A',tipo:'DISTRACAO'},{hora:'12:30',niv:'B',tipo:'CINTO'}],
       movimento:[{ini:'05:40',fim:'13:10',km:206}],
       trimble:{ segs:[{ini:'05:44',fim:'13:06',motorista:'Rafael Nunes',semelhanca:90}] } },
 
@@ -630,14 +631,14 @@ function demoRecords(){
 
     { operacao:'Baú', data:'2026-09-11', placa:'FTZ2A88', motoristaEscala:'Rafael Nunes',
       ponto:['05:30','14:00'],
-      alertasTimed:[{hora:'06:10',niv:'M',tipo:'EXCESSO_VELOCIDADE'},{hora:'09:30',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'13:00',niv:'B',tipo:'EXCESSO_VELOCIDADE'}],
+      alertasTimed:[{hora:'06:10',niv:'M',tipo:'FADIGA'},{hora:'09:30',niv:'A',tipo:'EXCESSO_VELOCIDADE'},{hora:'13:00',niv:'B',tipo:'CELULAR'}],
       movimento:[{ini:'05:45',fim:'13:40',km:198}],
       trimble:{ segs:[{ini:'05:48',fim:'13:36',motorista:'Rafael Nunes',semelhanca:64}] } },
 
     // marcou almoço (12:00–13:00) mas dirigiu na pausa (12:15–12:50) → "conduziu sem a pausa"
     { operacao:'Bitrem', data:'2026-09-11', placa:'FTZ2B01', motoristaEscala:'Sandro Lima',
       ponto:['06:00','12:00','13:00','16:20'],
-      alertasTimed:[{hora:'07:20',niv:'B',tipo:'EXCESSO_VELOCIDADE'},{hora:'10:05',niv:'M',tipo:'EXCESSO_VELOCIDADE'},{hora:'15:40',niv:'A',tipo:'EXCESSO_VELOCIDADE'}],
+      alertasTimed:[{hora:'07:20',niv:'B',tipo:'CINTO'},{hora:'10:05',niv:'M',tipo:'CELULAR'},{hora:'15:40',niv:'A',tipo:'EXCESSO_VELOCIDADE'}],
       movimento:[{ini:'06:15',fim:'11:55',km:180},{ini:'12:15',fim:'12:50',km:22},{ini:'13:05',fim:'16:10',km:120}],
       trimble:{ segs:[{ini:'06:17',fim:'11:53',motorista:'Sandro Lima',semelhanca:89},{ini:'12:16',fim:'12:49',motorista:'Sandro Lima',semelhanca:87},{ini:'13:07',fim:'16:08',motorista:'Sandro Lima',semelhanca:90}] } },
 
@@ -726,6 +727,20 @@ function alertsForRec(r){
   return [];
 }
 function nivName(c){ return c==='A'?'Alto':c==='M'?'Médio':c==='B'?'Baixo':'—'; }
+// ícone por tipo de alerta (câmera/telemetria) — casa pelo nome do tipo (norm, por substring)
+function alertaIcon(tipo){ const t=norm(tipo);
+  if(t.indexOf('VELOCID')>=0) return '⏱️';
+  if(t.indexOf('CELULAR')>=0||t.indexOf('TELEFONE')>=0) return '📱';
+  if(t.indexOf('FADIGA')>=0||t.indexOf('SONO')>=0||t.indexOf('BOCEJ')>=0||t.indexOf('OLHO FECHAD')>=0) return '😴';
+  if(t.indexOf('DISTRA')>=0||t.indexOf('OLHAR')>=0) return '👁️';
+  if(t.indexOf('CINTO')>=0) return '🔒';
+  if(t.indexOf('COLIS')>=0||t.indexOf('IMPACT')>=0||t.indexOf('FRENAG')>=0) return '💥';
+  if(t.indexOf('FUM')>=0||t.indexOf('CIGARR')>=0) return '🚬';
+  if(t.indexOf('AUSENTE')>=0||t.indexOf('SEM IDENT')>=0||t.indexOf('SEM_IDENT')>=0||t.indexOf('NAO IDENT')>=0) return '🙈';
+  if(t.indexOf('SEM SINAL')>=0||t.indexOf('SEM_SINAL')>=0) return '📡';
+  if(t.indexOf('PERMANEN')>=0||t.indexOf('PONTO')>=0) return '🅿️';
+  return '⚠️';
+}
 let TMS = null;             // placa → {centro, operacao} — do relatório do TMS (centro de resultado)
 let ABAST = null;           // motorista(norm) → {km, litros, valor, media, n} — do consolidado de abastecimento (real)
 let META_FAM = null;        // família de operação → meta média (km/l) — fallback
@@ -1052,7 +1067,7 @@ function renderZoom(id){
   el.querySelector('.lane[data-k="ponto"]').innerHTML=gl+st.ponto.map(p=>seg('ponto',p[0],p[1],hm(p[0]%1440)+'–'+hm(p[1]%1440))).join('');
   el.querySelector('.lane[data-k="mov"]').innerHTML=gl+st.mov.map(s=>seg('mov',s.a,s.b,(s.placa?s.placa+' · ':'')+hm(s.b-s.a)+(s.km?' · '+Math.round(s.km)+'km':''),s.fora?'fora':'')).join('')+st.almoco.map(s=>seg('almoco',s.a,s.b,'almoço')).join('');
   const laneAl=el.querySelector('.lane[data-k="alertas"]');
-  if(laneAl){ laneAl.innerHTML=gl+(st.alertas||[]).map(al=>{ const p=pos(al.t); if(p<-1||p>101) return ''; const cls=al.niv==='A'?'alto':al.niv==='M'?'medio':'baixo'; return `<span class="amark ${cls}" style="left:${p}%" title="${hm(al.t%1440)} · ${tipoLabel(al.tipo)} · ${nivName(al.niv)}"></span>`; }).join(''); }
+  if(laneAl){ laneAl.innerHTML=gl+(st.alertas||[]).map(al=>{ const p=pos(al.t); if(p<-1||p>101) return ''; const cls=al.niv==='A'?'alto':al.niv==='M'?'medio':'baixo'; return `<span class="amark ${cls}" style="left:${p}%" title="${hm(al.t%1440)} · ${tipoLabel(al.tipo)} · ${nivName(al.niv)}"><i>${alertaIcon(al.tipo)}</i></span>`; }).join(''); }
 }
 function setupZoom(id){
   const el=document.getElementById(id); if(!el) return; renderZoom(id);
