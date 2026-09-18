@@ -416,8 +416,8 @@
       </div>
       <div class="drop" id="drop-mov">
         <h3><span class="num">2</span> Movimentação + Identificação (Trimble)</h3>
-        <p>Histórico do veículo com o condutor identificado. Colunas: <code>Veículo</code>, <code>Ocorrência</code>, <code>Data/Hora inicial</code> / <code>final</code>, <code>Motorista</code>, <code>Distância</code>.</p>
-        <input type="file" id="fileMov" accept=".csv,.xlsx,.xls,.txt" hidden>
+        <p>Histórico do veículo com o condutor identificado. Colunas: <code>Veículo</code>, <code>Ocorrência</code>, <code>Data/Hora inicial</code> / <code>final</code>, <code>Motorista</code>, <code>Distância</code>, <code>Consumo</code>. Aceita <code>.zip</code> com vários CSVs diários (grande) — carregue a jornada antes.</p>
+        <input type="file" id="fileMov" accept=".zip,.csv,.xlsx,.xls,.txt" hidden>
         <button class="btn solid" onclick="document.getElementById('fileMov').click()">Selecionar arquivo</button>
         <div class="status-line" id="stMov">nenhum arquivo — usando demonstração</div>
       </div>
@@ -1342,50 +1342,52 @@ function splitDT(v){ // "dd/mm/yyyy HH:MM" | "HH:MM" | "yyyy-mm-dd HH:MM"
 let pending={ponto:null,mov:null};
 function numBR(v){ v=String(v==null?'':v).trim(); if(v.indexOf(',')>=0) return parseFloat(v.replace(/\./g,'').replace(',','.'))||0; return parseFloat(v)||0; }
 
-function ingest(){
-  const P=pending.ponto||[], M=pending.mov||[];
-  if(!P.length && !M.length){ toast('Carregue a jornada (ponto) e a movimentação'); return; }
-
-  // ---- 1) JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia) ----
+let MOV_N=0;
+// JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia)
+function parseJornada(P){
   const ponto={}, roster=new Set(), opBy={};
-  P.forEach(row=>{
+  (P||[]).forEach(row=>{
     const cN=col(row,['nome do funcionario','funcionario','colaborador','motorista','nome']);
     const cDep=col(row,['departamento','operacao','setor','filial']);
     const cD=col(row,['dia','data']);
     const nome=cN?String(row[cN]).trim():''; if(!nome) return;
     const data=cD?isoDate(splitDT(row[cD]).date||row[cD]):''; if(!data) return;
     const nn=norm(nome); roster.add(nn); if(cDep && !opBy[nn]) opBy[nn]=String(row[cDep]).trim();
-    // coleta batidas na ordem Entrada1,Saída1,Entrada2,... (ignora "Justificado"/vazio)
     const hs=[];
     for(let n=1;n<=8;n++){
       const ce=col(row,['entrada '+n]); if(ce){ const t=String(row[ce]).match(/(\d{1,2}:\d{2})/); if(t) hs.push(t[1]); }
       const cs=col(row,['saida '+n,'saída '+n]); if(cs){ const t=String(row[cs]).match(/(\d{1,2}:\d{2})/); if(t) hs.push(t[1]); }
     }
     if(!hs.length){ const cH=col(row,['hora','horario','batida']); if(cH){ const t=String(row[cH]).match(/(\d{1,2}:\d{2})/); if(t) hs.push(t[1]); } }
-    if(!hs.length) return; // dia sem batida (justificado/folga)
+    if(!hs.length) return;
     const k=nn+'|'+data; const g=(ponto[k]=ponto[k]||{nome,data,punches:[]}); hs.forEach(h=>g.punches.push(h));
   });
-
-  // ---- 2) MOVIMENTAÇÃO + IDENTIFICAÇÃO (Trimble): eventos "Movimento" por (motoristaNorm|dia) ----
-  const movRaw={};
-  M.forEach(row=>{
+  return {ponto, roster, opBy};
+}
+// MOVIMENTAÇÃO: acumula eventos "Movimento" (dos motoristas da jornada) em movRaw — reutilizável (single ou zip)
+function accMov(rows, movRaw, roster){
+  let n=0;
+  (rows||[]).forEach(row=>{
     const cOcc=col(row,['ocorrencia','status','evento','situacao']);
-    if(cOcc && !norm(row[cOcc]).includes('MOVIMENTO')) return;               // só deslocamento
+    if(cOcc && !norm(row[cOcc]).includes('MOVIMENTO')) return;
     const cM=col(row,['motorista','condutor']); const nome=cM?String(row[cM]).trim():''; if(!nome) return;
     const nn=norm(nome); if(!roster.has(nn)) return;                          // escopo: motoristas da jornada
     const cIni=col(row,['data/hora inicial','inicial','datahora_inicial','inicio','ini']);
     const cFim=col(row,['data/hora final','final','datahora_final','fim']);
     const cP=col(row,['veiculo','placa','patante']); const cKm=col(row,['distancia','km','percorrida']);
-    const cCons=col(row,['consumo','combustivel','litros']);
-    const cD=col(row,['data_arquivo','data','dia']);
+    const cCons=col(row,['consumo','combustivel','litros']); const cD=col(row,['data_arquivo','data','dia']);
     const di=cIni?splitDT(row[cIni]):{date:'',time:''}, df=cFim?splitDT(row[cFim]):{date:'',time:''};
     const data=di.date||(cD?isoDate(splitDT(row[cD]).date||row[cD]):''); const ini=toMin(di.time), fim=toMin(df.time);
     if(!data||ini==null||fim==null||fim<ini) return;
     const placa=cP?String(row[cP]).toUpperCase().replace(/\s|-/g,''):'';
     const k=nn+'|'+data; const g=(movRaw[k]=movRaw[k]||{nome,data,segs:[]});
-    g.segs.push({ini,fim,km:cKm?numBR(row[cKm]):0,litros:cCons?numBR(row[cCons]):0,placa});
+    g.segs.push({ini,fim,km:cKm?numBR(row[cKm]):0,litros:cCons?numBR(row[cCons]):0,placa}); n++;
   });
-  // merge de segmentos próximos (Trimble fragmenta muito Movimento/Parado)
+  return n;
+}
+// merge + join + publica os registros
+function finalizeRecords(jor, movRaw, movRows, pontoRows){
+  const {ponto, roster, opBy}=jor;
   const GAP=Math.max(CFG.movMin,10);
   Object.values(movRaw).forEach(g=>{
     g.segs.sort((a,b)=>a.ini-b.ini); const merged=[];
@@ -1394,8 +1396,6 @@ function ingest(){
       else merged.push({ini:s.ini,fim:s.fim,km:s.km,litros:s.litros,placas:s.placa?[s.placa]:[]}); });
     g.merged=merged;
   });
-
-  // ---- 3) JOIN por motorista + dia ----
   const keys=new Set([...Object.keys(ponto),...Object.keys(movRaw)]); const records=[];
   keys.forEach(k=>{
     const sep=k.indexOf('|'), nn=k.slice(0,sep), data=k.slice(sep+1);
@@ -1406,13 +1406,38 @@ function ingest(){
     records.push({ operacao:opBy[nn]||'—', data, placa:placas[0]||'', placas, motoristaEscala:nome,
       ponto: pp?pp.punches.slice():[], movimento, trimble:{segs:[]} });
   });
-
   if(!records.length){ toast('Não consegui cruzar — confira as colunas na aba Dados'); return; }
-  RAW={ records, bases:{ponto:!!P.length,mov:!!M.length,trim:false}, counts:{ponto:P.length,mov:M.length,alertas:ALERTS_N} };
-  if(ALERTS) RAW.alertas=ALERTS;
+  MOV_N=movRows;
+  RAW={ records, bases:{ponto:!!pontoRows,mov:!!movRows,trim:false}, counts:{ponto:pontoRows,mov:movRows,alertas:ALERTS_N} };
+  if(ALERTS) RAW.alertas=ALERTS; if(PLACA_UO) RAW.placaUO=PLACA_UO;
   REAL=true; saveData();
   build(); fillFilters(); renderAll(); updateDropStatus();
-  toast('Cruzado ✓ '+records.length+' motorista-dias · '+roster.size+' motoristas');
+}
+function ingest(){
+  const P=pending.ponto||[], M=pending.mov||[];
+  if(!P.length && !M.length){ toast('Carregue a jornada (ponto) e a movimentação'); return; }
+  const jor=parseJornada(P); const movRaw={}; const n=accMov(M, movRaw, jor.roster);
+  finalizeRecords(jor, movRaw, M.length, P.length);
+  toast('Cruzado ✓ '+RECORDS.length+' motorista-dias · '+jor.roster.size+' motoristas');
+}
+// MOVIMENTAÇÃO em ZIP (vários CSVs diários) — processa arquivo por arquivo (streaming)
+function ingestMovZip(file){
+  if(!(pending.ponto&&pending.ponto.length)){ toast('Carregue primeiro a jornada (ponto)'); return; }
+  if(typeof JSZip==='undefined'){ toast('Sem internet p/ abrir .zip'); return; }
+  const jor=parseJornada(pending.ponto); const movRaw={}; let movRows=0, files=0;
+  const rd=new FileReader();
+  rd.onload=e=>{ JSZip.loadAsync(e.target.result).then(zip=>{
+    const names=Object.keys(zip.files).filter(f=>/\.csv$/i.test(f) && !zip.files[f].dir).sort();
+    if(!names.length){ toast('Zip sem CSVs'); return; }
+    let idx=0;
+    (function next(){
+      if(idx>=names.length){ finalizeRecords(jor, movRaw, movRows, pending.ponto.length); toast('Movimentação ✓ '+files+' arquivos · '+movRows.toLocaleString('pt-BR')+' movimentos · '+RECORDS.length+' motorista-dias'); return; }
+      const nm=names[idx++]; toast('Movimentação: '+idx+'/'+names.length+'…');
+      zip.files[nm].async('arraybuffer').then(ab=>{ try{ movRows+=accMov(parseCSV(decodeText(ab)), movRaw, jor.roster); files++; }catch(_){} setTimeout(next,0); })
+        .catch(()=>setTimeout(next,0));
+    })();
+  }).catch(()=>toast('Erro ao abrir o zip')); };
+  rd.readAsArrayBuffer(file);
 }
 
 let ALERTS_N=0, PLACA_UO=null;   // PLACA_UO: placa → {uo, uoCurta} (UO Trimble, do relatório de alertas)
@@ -1605,7 +1630,12 @@ function bindCfg(id,key){ const el=$(id); el.value=CFG[key]; el.addEventListener
 bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgPreco','precoLitro'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH');
 // import
 $('#filePonto').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo jornada…'); readFile(e.target.files[0],rows=>{ pending.ponto=rows; updateDropStatus(); if(pending.mov) ingest(); }); } });
-$('#fileMov').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo movimentação (pode levar alguns segundos)…'); readFile(e.target.files[0],rows=>{ pending.mov=rows; updateDropStatus(); if(pending.ponto) ingest(); else toast('Agora carregue também a jornada (ponto)'); }); } });
+$('#fileMov').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return;
+  const ext=(f.name.split('.').pop()||'').toLowerCase();
+  if(!pending.ponto){ toast('Carregue primeiro a jornada (ponto)'); return; }
+  if(ext==='zip'){ toast('Lendo movimentação (zip de vários dias, aguarde)…'); setTimeout(()=>ingestMovZip(f),30); }
+  else { toast('Lendo movimentação…'); readFile(f,rows=>{ pending.mov=rows; updateDropStatus(); ingest(); }); }
+});
 $('#fileAlertas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando alertas (arquivo grande, aguarde)…'); setTimeout(()=>loadAlertas(e.target.files[0]),30); } });
 $('#fileTms').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo TMS…'); readFile(e.target.files[0],rows=>ingestTMS(rows)); } });
 $('#fileAbast').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo abastecimento (arquivo grande, aguarde)…'); setTimeout(()=>loadAbastecimento(e.target.files[0]),30); } });
