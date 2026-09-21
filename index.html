@@ -752,7 +752,13 @@ function alertasReais(nome){ const nn=norm(nome); const b=BOL&&BOL[nn], a=ALERTS
   if(b) return {nome, total:b.total, tipos:b.tipos||{}, niveis:(a&&a.niveis)||{}, semanas:(a&&a.semanas)||{}};
   return a||null; }
 // resumo de alertas de um motorista — usa o relatório real se carregado; senão o cadastro demo
-function alertasResumo(nome){
+function alertasResumo(nome, range){
+  const nn=norm(nome);
+  // com filtro de data: conta por dia (Boletim) ou por evento (Alertas/AL_TL)
+  if(range){
+    if(BOL_DAY){ let total=0; const tipos={}; const dm=BOL_DAY[nn]||{}; for(const d in dm){ if(d>=range.de && d<=range.ate){ total+=dm[d].t; const tp=dm[d].tipos; for(const k in tp) tipos[k]=(tipos[k]||0)+tp[k]; } } return {total, badges:[], real:true, niveis:{}, tipos}; }
+    if(AL_TL){ let total=0; const tipos={}, niveis={}; (AL_TL[nn]||[]).forEach(e=>{ if(e[0]>=range.de && e[0]<=range.ate){ total++; const tp=e[3]||'ALERTA'; tipos[tp]=(tipos[tp]||0)+1; const nv=e[2]==='A'?'ALTO':e[2]==='M'?'MEDIO':e[2]==='B'?'BAIXO':''; if(nv)niveis[nv]=(niveis[nv]||0)+1; } }); const badges=NIVEL_DEF.filter(d=>niveis[d.k]).map(d=>({lab:d.lab,ic:d.ic,n:niveis[d.k],hot:d.k==='ALTO'})); return {total, badges, real:true, niveis, tipos}; }
+  }
   const real=alertasReais(nome);
   if(real){
     const badges=NIVEL_DEF.filter(d=>real.niveis[d.k]).map(d=>({lab:d.lab,ic:d.ic,n:real.niveis[d.k],hot:d.k==='ALTO'}));
@@ -785,6 +791,7 @@ let BASES = {ponto:true, mov:true, trim:true};   // quais das 3 fontes estão ca
 let ALERTS = null;          // agregado de alertas por motorista (norm) — do relatório de alertas
 let AL_TL = null;           // motorista(norm) → [ [dataISO, minutos, nivelChar, tipo] ] — horário exato p/ a linha do tempo (só em memória)
 let BOL = null, BOL_N = 0;  // Boletim do Motorista: motorista(norm) → {nome,total,tipos,dias,km,litros,media,dep} — alertas por tipo por motorista
+let BOL_DAY = null;         // Boletim por motorista(norm)→{dia:{t,tipos}} — p/ os alertas obedecerem o filtro de data (só em memória)
 let SAUDE = null, SAUDE_N = 0;   // Saúde das câmeras: placa(key) → {op,status,func,manut}
 let PED_OP = null, PED_DRV = null, PED_N = 0;   // Pedidos: placa|dia → centro de resultado (operação) e CPF do condutor planejado
 let CPF2NOME = null, NOME2CPF = null;           // de-para CPF ↔ nome (do Boletim/jornada)
@@ -1008,7 +1015,7 @@ function renderKpis(rows){
     let km=0,l=0; rows.forEach(r=>{km+=r.km||0;l+=r.litros||0;}); if(l>0) return km/l;
     const a=motSet.map(m=>drv(m).media).filter(v=>v!=null); return a.length?a.reduce((x,y)=>x+y,0)/a.length:null; })();
   let alertKpi=null;
-  if(ALERTS||BOL){ let tot=0,alto=0,nmot=0; motSet.forEach(m=>{ const a=alertasReais(m); if(a&&a.total){ tot+=a.total; nmot++; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto,nmot}; }
+  if(ALERTS||BOL){ const rng=activeRange(); let tot=0,alto=0,nmot=0; motSet.forEach(m=>{ const a=alertasResumo(m, rng); if(a&&a.total){ tot+=a.total; nmot++; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto,nmot}; }
   // ① Identificação (aderência da câmera) da seleção atual — ponderada pelas horas de condução
   let idW=0, idT=0; rows.forEach(r=>{ const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); idW+=v*w; idT+=w; } });
   const identSel = idT>0? Math.round(idW/idT) : null;
@@ -1228,6 +1235,11 @@ function buildPlacaCards(placaQ, prefix, cap){
 }
 // dia único selecionado (filtro Dia, ou De===Até) — p/ a linha do tempo focar só naquele dia
 function dayFilter(){ const d=$('#fDia').value; if(d) return d; const de=$('#fDe').value, ate=$('#fAte').value; if(de&&ate&&de===ate) return de; return ''; }
+// intervalo de datas ativo (dia, De/Até ou fechamento) — p/ os alertas obedecerem o filtro de data
+function activeRange(){ const dia=$('#fDia').value; if(dia) return {de:dia,ate:dia};
+  const de=$('#fDe').value, ate=$('#fAte').value; if(de||ate) return {de:de||'0000-01-01', ate:ate||'9999-12-31'};
+  const fe=$('#fFecha').value; if(fe){ const f=fechamento(fe+'-15'); if(f) return {de:f.start, ate:f.end}; }
+  return null; }
 function renderTimelines(rows){
   const box=$('#timelines');
   // modo placa: se a busca casa com uma placa (e não com um nome), mostra a movimentação da placa
@@ -1386,7 +1398,7 @@ function renderFicha(){
   const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
   const _dayF=dayFilter(); const _recsEvid=_dayF?recs.filter(r=>r.data===_dayF):recs;
   const wk=buildWeekCards(_recsEvid,'fztl',12,false,_dayF?'dia':'week');   // evidência (dia único se filtrado; senão semanal) com zoom
-  const alR=alertasResumo(nome); const totAl=alR.total;
+  const alR=alertasResumo(nome, activeRange()); const totAl=alR.total;
   const tempo=tempoDeCasa(d.admissao);
   const kmR=recs.reduce((a,r)=>a+(r.km||0),0), litrosR=recs.reduce((a,r)=>a+(r.litros||0),0);
   const abF=ABAST&&ABAST[norm(nome)];
@@ -1960,9 +1972,9 @@ function aggBoletim(text){
   const first=text.slice(0,nl).replace(/\r$/,'');
   const delim=(first.match(/;/g)||[]).length>=(first.match(/,/g)||[]).length?';':',';
   const head=splitCSVLine(first,delim); const H={}; head.forEach((h,i)=>H[norm(h)]=i);
-  const iMot=H['MOTORISTA'], iCpf=(H['CPF']!=null?H['CPF']:H['CPF MOTORISTA']), iDep=H['DEPARTAMENTO'], iKm=H['DISTANCIA PERCORRIDA'], iLit=H['CONSUMO DE COMBUSTIVEL'];
+  const iMot=H['MOTORISTA'], iCpf=(H['CPF']!=null?H['CPF']:H['CPF MOTORISTA']), iDep=H['DEPARTAMENTO'], iKm=H['DISTANCIA PERCORRIDA'], iLit=H['CONSUMO DE COMBUSTIVEL'], iDia=H['DIA'];
   const cols=BOL_TIPOS.map(t=>Object.assign({},t,{idx:(H[t.c]!=null?H[t.c]:-1)}));
-  const A={}; let n=0, start=nl+1;
+  const A={}, day={}; let n=0, start=nl+1;
   while(start<text.length){
     let end=text.indexOf('\n',start); if(end<0) end=text.length;
     const line=text.slice(start, text.charCodeAt(end-1)===13?end-1:end); start=end+1;
@@ -1974,18 +1986,19 @@ function aggBoletim(text){
     a.dias++;
     if(iKm!=null) a.km+=numBR(c[iKm]); if(iLit!=null) a.litros+=numBR(c[iLit]);
     if(iDep!=null){ const d=(c[iDep]||'').trim(); if(d && norm(d)!=='SEM DEPARTAMENTO' && !a.dep) a.dep=d; }
+    const dISO = iDia!=null? isoDate(c[iDia]) : ''; let dd=null; if(dISO){ const dm=(day[nn]=day[nn]||{}); dd=(dm[dISO]=dm[dISO]||{t:0,tipos:{}}); }
     cols.forEach(t=>{ if(t.idx<0) return; const v=c[t.idx]; if(!v) return;
       const add = t.k==='d' ? (durSec(v)>0?1:0) : (parseInt(String(v).trim(),10)||0);
-      if(add>0){ a.tipos[t.l]=(a.tipos[t.l]||0)+add; a.total+=add; }
+      if(add>0){ a.tipos[t.l]=(a.tipos[t.l]||0)+add; a.total+=add; if(dd){ dd.tipos[t.l]=(dd.tipos[t.l]||0)+add; dd.t+=add; } }
     });
     n++;
   }
-  return {A,n};
+  return {A,n,day};
 }
 function loadBoletim(file){
   const ext=(file.name.split('.').pop()||'').toLowerCase();
   const done=(text)=>{ try{
-      const r=aggBoletim(text); BOL=r.A; BOL_N=r.n; rebuildDePara();
+      const r=aggBoletim(text); BOL=r.A; BOL_N=r.n; BOL_DAY=r.day||{}; rebuildDePara();
       build(); fillFilters(); updateDropStatus(); renderAll();
       toast('Boletim ✓ '+r.n.toLocaleString('pt-BR')+' registros · '+Object.keys(r.A).length+' motoristas · alertas por tipo');
     }catch(err){ toast('Erro ao processar o Boletim'); } };
@@ -2253,8 +2266,8 @@ $('#fileBoletim').addEventListener('change',e=>{ if(e.target.files[0]){ toast('P
 $('#filePedidos').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando Pedidos (arquivo grande, aguarde)…'); setTimeout(()=>loadPedidos(e.target.files[0]),30); } });
 $('#fileSaude').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo saúde das câmeras…'); loadSaude(e.target.files[0]); } });
 $('#recalc').onclick=()=>{ ingest(); };
-$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_UNSEG_STORE=null; MOV_TOT={}; MOV_IDN={}; MOV_UNSEG={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
-$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_UNSEG_STORE=null; MOV_TOT={}; MOV_IDN={}; MOV_UNSEG={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_UNSEG_STORE=null; MOV_TOT={}; MOV_IDN={}; MOV_UNSEG={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; BOL_DAY=null; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_UNSEG_STORE=null; MOV_TOT={}; MOV_IDN={}; MOV_UNSEG={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; BOL_DAY=null; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
 
 // INIT
 if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; PLACA_UO=RAW.placaUO||null; }
