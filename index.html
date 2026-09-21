@@ -333,6 +333,7 @@
     <button data-tab="tabela">Consolidado</button>
     <button data-tab="operacao">Operação por placa</button>
     <button data-tab="saude">Saúde das câmeras</button>
+    <button data-tab="semid">Placas sem ID</button>
     <button data-tab="dados">Dados &amp; como usar</button>
   </nav>
 </header>
@@ -437,6 +438,14 @@
     <div class="sec-title"><h2>Operação por placa — Trimble × TMS</h2><span>a UO da Trimble (dos alertas) confere com o centro de resultado do TMS?</span>
       <button class="btn" id="expOper" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
     <div id="opBox"></div>
+  </section>
+
+  <!-- ===== PLACAS SEM IDENTIFICAÇÃO ===== -->
+  <section class="view" id="view-semid">
+    <div class="grid kpis" id="semidKpis"></div>
+    <div class="sec-title"><h2>Placas sem identificação do motorista</h2><span>veículos que se moveram mas a câmera não identificou o condutor — plano de ação</span>
+      <button class="btn" id="expSemId" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
+    <div id="semidBox"></div>
   </section>
 
   <!-- ===== SAÚDE DAS CÂMERAS ===== -->
@@ -1417,6 +1426,7 @@ function renderAll(){
   renderTable(rows);
   renderBatimento();
   renderSaude();
+  renderPlacasSemId();
   const pill=$('#dataModePill'), txt=$('#dataModeTxt');
   if(REAL){ pill.classList.add('real'); txt.textContent='dados reais · '+(RECORDS.length)+' registros'; }
   else { pill.classList.remove('real'); txt.textContent='dados de demonstração'; }
@@ -1470,6 +1480,39 @@ function exportSaude(){
   SAUDE_ROWS.forEach(r=>lines.push([r.placa,r.op,'"'+r.func+'"','"'+r.idStatus+'"',r.dias,(r.ader==null?'':r.ader),'"'+r.acao+'"'].join(';')));
   baixarCsv(lines,'saude_cameras.csv');
 }
+let SEMID_ROWS=[];
+function renderPlacasSemId(){
+  const kbox=$('#semidKpis'), box=$('#semidBox');
+  if(!PLACA_MOV || !Object.keys(PLACA_MOV).length){ kbox.innerHTML=''; box.innerHTML='<div class="empty">Carregue a <b>Movimentação</b> na aba <b>Dados</b> para listar as placas que se moveram sem identificação do condutor. (precisa que o relatório traga o movimento mesmo sem motorista)</div>'; SEMID_ROWS=[]; return; }
+  const rk={critico:0,atencao:1};
+  const rows=Object.keys(PLACA_MOV).map(pk=>{ const g=PLACA_MOV[pk];
+    const ader = g.tot>0? Math.round(g.idn/g.tot*100) : null;
+    const op = operacaoDaPlaca(pk) || (PLACA_UO&&PLACA_UO[pk]&&PLACA_UO[pk].uoCurta) || '—';
+    const cam = SAUDE&&SAUDE[pk] ? (SAUDE[pk].func||SAUDE[pk].status||'') : '';
+    let status, cls;
+    if(g.idn===0){ status='NENHUM condutor identificado'; cls='critico'; }
+    else if(ader!=null && ader<CFG.sem){ status='Identificação abaixo do mínimo'; cls='atencao'; }
+    else { status='OK'; cls='ok'; }
+    return {placa:pk, op, dias:g.dias, diasId:g.diasId, ader, cam, status, cls, ult:g.ult};
+  }).filter(r=>r.cls!=='ok').sort((a,b)=> (rk[a.cls]-rk[b.cls]) || (a.ader||0)-(b.ader||0) || b.dias-a.dias);
+  SEMID_ROWS=rows;
+  const totPlacas=Object.keys(PLACA_MOV).length, semNenhum=rows.filter(r=>r.cls==='critico').length, baixa=rows.filter(r=>r.cls==='atencao').length;
+  const K=[
+    {lab:'Placas que se moveram',val:totPlacas.toLocaleString('pt-BR'),sub:'no período',ac:'var(--s2)'},
+    {lab:'Sem NENHUMA identificação',val:semNenhum,sub:'câmera não reconheceu ninguém',ac:'var(--critical)'},
+    {lab:'Identificação baixa',val:baixa,sub:'abaixo do mínimo ('+CFG.sem+'%)',ac:'var(--warning)'},
+    {lab:'Para ação',val:rows.length,sub:'total nesta lista',ac:'var(--serious)'},
+  ];
+  kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+  if(!rows.length){ box.innerHTML='<div class="empty">🎉 Todas as placas que se moveram tiveram condutor identificado dentro do mínimo.</div>'; return; }
+  const chip={critico:'<span class="chip critico">Sem ID</span>',atencao:'<span class="chip atencao">ID baixa</span>'};
+  box.innerHTML='<div class="tblwrap"><table style="min-width:840px"><thead><tr><th>Placa</th><th>Operação</th><th>Dias moveu</th><th>Dias c/ ID</th><th>Aderência</th><th>Câmera (saúde)</th><th>Últ. mov.</th><th>Situação</th></tr></thead><tbody>'+
+    rows.map(r=>`<tr><td class="tnum">${r.placa}</td><td>${r.op}</td><td class="tnum">${r.dias}</td><td class="tnum">${r.diasId}</td>
+      <td class="tnum" style="color:${r.ader===0?'var(--crit-ink)':(r.ader<CFG.sem?'var(--serious)':'inherit')}">${r.ader==null?'—':r.ader+'%'}</td>
+      <td>${r.cam||'—'}</td><td class="tnum">${r.ult?brDate(r.ult):'—'}</td><td>${chip[r.cls]||''}</td></tr>`).join('')+
+    '</tbody></table></div>';
+}
+function exportSemId(){ if(!SEMID_ROWS.length){toast('Nada para exportar');return;} const head=['Placa','Operacao','Dias_moveu','Dias_com_ID','Aderencia_pct','Camera_saude','Ultima_mov','Situacao']; const lines=[head.join(';')]; SEMID_ROWS.forEach(r=>lines.push([r.placa,'"'+r.op+'"',r.dias,r.diasId,(r.ader==null?'':r.ader),'"'+(r.cam||'')+'"',r.ult,'"'+r.status+'"'].join(';'))); baixarCsv(lines,'placas_sem_identificacao.csv'); }
 function renderBatimento(){
   const kbox=$('#opKpis'), box=$('#opBox'); const rows=batimentoRows();
   if(!rows){ kbox.innerHTML=''; box.innerHTML='<div class="empty">Carregue os relatórios de <b>Alertas</b> (dá a UO da Trimble por placa) e do <b>TMS</b> (centro de resultado) na aba <b>Dados</b> para ver o batimento de operação.</div>'; return; }
@@ -1659,6 +1702,8 @@ function numBR(v){ v=String(v==null?'':v).trim(); if(v.indexOf(',')>=0) return p
 let MOV_N=0;
 // ADERÊNCIA DE IDENTIFICAÇÃO — por placa+dia: minutos de movimento total × com condutor identificado (só em memória)
 let MOV_TOT={}, MOV_IDN={};
+// resumo por PLACA: {tot,idn(min),dias,diasId,ult} — inclui placas que se moveram SEM condutor identificado (persistido em RAW.placaId)
+let PLACA_MOV=null;
 function aderDe(placas, data){ let tot=0,idn=0; (placas||[]).forEach(p=>{ const pk=placaKey(p)+'|'+data; tot+=MOV_TOT[pk]||0; idn+=MOV_IDN[pk]||0; }); return tot>0? Math.round(idn/tot*100) : null; }
 // JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia)
 function parseJornada(P){
@@ -1728,8 +1773,10 @@ function finalizeRecords(jor, movRaw, movRows, pontoRows){
   });
   if(!records.length){ toast('Não consegui cruzar — confira as colunas na aba Dados'); return; }
   MOV_N=movRows;
+  // resumo por placa (inclui placas que moveram SEM condutor identificado)
+  PLACA_MOV={}; for(const k in MOV_TOT){ const s=k.indexOf('|'), pk=k.slice(0,s), d=k.slice(s+1); const g=(PLACA_MOV[pk]=PLACA_MOV[pk]||{tot:0,idn:0,dias:0,diasId:0,ult:''}); g.tot+=MOV_TOT[k]; const idn=MOV_IDN[k]||0; g.idn+=idn; g.dias++; if(idn>0)g.diasId++; if(d>g.ult)g.ult=d; }
   RAW={ records, bases:{ponto:!!pontoRows,mov:!!movRows,trim:false}, counts:{ponto:pontoRows,mov:movRows,alertas:ALERTS_N} };
-  if(ALERTS) RAW.alertas=ALERTS; if(PLACA_UO) RAW.placaUO=PLACA_UO;
+  if(ALERTS) RAW.alertas=ALERTS; if(PLACA_UO) RAW.placaUO=PLACA_UO; if(PLACA_MOV) RAW.placaId=PLACA_MOV;
   REAL=true; saveData();
   build(); fillFilters(); renderAll(); updateDropStatus();
 }
@@ -2079,6 +2126,7 @@ $('#expSemana').onclick=exportSemana;
 $('#expOper').onclick=exportOperacao;
 $('#expMedia').onclick=exportMedia;
 $('#expSaude').onclick=exportSaude;
+$('#expSemId').onclick=exportSemId;
 // config
 function bindCfg(id,key){ const el=$(id); el.value=CFG[key]; el.addEventListener('input',()=>{ CFG[key]=parseFloat(el.value)||0; saveCfg(); build(); fillFilters(); renderAll(); }); }
 bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgPreco','precoLitro'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH'); bindCfg('#cfgJornadaMin','jornadaMin');
@@ -2098,11 +2146,12 @@ $('#fileBoletim').addEventListener('change',e=>{ if(e.target.files[0]){ toast('P
 $('#filePedidos').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando Pedidos (arquivo grande, aguarde)…'); setTimeout(()=>loadPedidos(e.target.files[0]),30); } });
 $('#fileSaude').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo saúde das câmeras…'); loadSaude(e.target.files[0]); } });
 $('#recalc').onclick=()=>{ ingest(); };
-$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
-$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_TOT={}; MOV_IDN={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_TOT={}; MOV_IDN={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
 
 // INIT
 if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; PLACA_UO=RAW.placaUO||null; }
+if(RAW&&RAW.placaId) PLACA_MOV=RAW.placaId;
 build(); fillFilters(); renderAll(); updateDropStatus();
 </script>
 </body>
