@@ -1173,8 +1173,58 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
   }).join('') + (groups.length>cap?`<div class="empty">Mostrando ${cap} de ${groups.length} ${noun} — filtre para focar.</div>`:'');
   return {html, ids};
 }
+// MODO PLACA: agrupa a linha do tempo por PLACA (todos os condutores) — mostra a movimentação da placa
+function buildPlacaCards(placaQ, prefix, cap){
+  for(const k in ZTL) if(k.indexOf(prefix)===0) delete ZTL[k];
+  const pk0=placaKey(placaQ);
+  const rP=r=>(r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[]);
+  const fe=$('#fFecha').value, op=$('#fOp').value, de=$('#fDe').value, ate=$('#fAte').value, dia=$('#fDia').value;
+  const recs=RECORDS.filter(r=>{
+    if(!rP(r).some(p=>placaKey(p).includes(pk0))) return false;
+    if(fe){ const f=fechamento(r.data); if(!f||f.key!==fe) return false; }
+    if(op && r.operacao!==op) return false;
+    if(dia && r.data!==dia) return false;
+    if(de && r.data<de) return false; if(ate && r.data>ate) return false;
+    return true;
+  });
+  const grp={};
+  recs.forEach(r=>{ const pl=rP(r).map(placaKey).find(p=>p.includes(pk0))||pk0; const f=fechamento(r.data)||{key:r.semKey,start:r.semKey,end:r.data,label:r.semana}; const total=f.start?fechaMin(f):WEEK; const k=pl+'|'+f.key; const g=(grp[k]=grp[k]||{placa:pl,start:f.start,total,label:f.label,recs:[]}); g.recs.push(r); });
+  const groups=Object.values(grp).sort((a,b)=> a.label<b.label?1:a.label>b.label?-1:a.placa.localeCompare(b.placa));
+  const shown=groups.slice(0,cap); const ids=[];
+  const html=shown.map((g,i)=>{
+    const id=prefix+i; ids.push(id); const mov=[],ident=[]; let km=0; const drivers=new Set(), dias=new Set();
+    g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data);
+      r.mov.forEach(s=>{ if(!placaKey(s.placa||'').includes(pk0) && (r.placas||[]).length>1) return; mov.push({a:off+s.ini,b:off+s.fim,km:s.km,lab:firstName(r.motoristaEscala)+' · '+hm(s.ini%1440)+'–'+hm(s.fim%1440)}); ident.push({a:off+s.ini,b:off+s.fim,ok:true}); km+=s.km||0; drivers.add(r.motoristaEscala); });
+      (r.movUnid||[]).forEach(s=> ident.push({a:off+s.ini,b:off+s.fim,ok:false}));
+    });
+    ZTL[id]={weekStart:g.start, ponto:[], mov, almoco:[], alertas:[], ident, t0:0, t1:g.total, total:g.total};
+    const meta=`<div class="meta">
+      <div class="m"><span>Fechamento</span><b>${g.label}</b></div>
+      <div class="m"><span>Dias c/ mov.</span><b>${dias.size}</b></div>
+      <div class="m"><span>Motoristas</span><b style="color:${drivers.size>1?'var(--serious)':'inherit'}">${drivers.size||'—'}</b></div>
+      <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div></div>`;
+    return `<div class="card wtl-card"><div class="tl-head"><div class="who"><b>🚚 ${g.placa}</b><small>${[...drivers].map(firstName).join(', ')||'sem condutor identificado'}</small></div>${meta}</div>
+      <div class="wtl" id="${id}">
+        <div class="wtl-ruler"></div>
+        <div class="track"><span class="tlab">Direção</span><div class="lane" data-k="mov"></div></div>
+        <div class="track"><span class="tlab">Identificação</span><div class="lane" data-k="ident"></div></div>
+      </div>
+      <div class="wtl-hint">🖱️ role o mouse para <b>zoom</b> (período → dia → horas) · arraste p/ navegar · duplo-clique reseta</div>
+    </div>`;
+  }).join('') || '<div class="empty">Nenhuma movimentação registrada para essa placa no filtro atual.</div>';
+  return {html, ids};
+}
 function renderTimelines(rows){
   const box=$('#timelines');
+  // modo placa: se a busca casa com uma placa (e não com um nome), mostra a movimentação da placa
+  const q=$('#fBusca').value.trim(); const qn=norm(q), qk=placaKey(q);
+  const isName = qn && RECORDS.some(r=>norm(r.motoristaEscala).includes(qn));
+  const isPlaca = qk.length>=4 && !isName && RECORDS.some(r=>((r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[])).some(p=>placaKey(p).includes(qk)));
+  if(isPlaca){
+    const {html,ids}=buildPlacaCards(q,'ztl',60);
+    box.innerHTML='<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)">🚚 <b>Modo placa</b>: movimentação da placa <b>'+q.toUpperCase()+'</b> (todos os condutores) · <span style="color:var(--good-ink)">verde = identificado</span> · <span style="color:var(--crit-ink)">vermelho = sem identificação</span></div>'+html;
+    ids.forEach(setupZoom); wireZtlDrag(); return;
+  }
   if(!rows.length){ box.innerHTML='<div class="empty">Nenhum registro para o filtro atual.</div>'; for(const k in ZTL) if(k.indexOf('ztl')===0) delete ZTL[k]; return; }
   const {html,ids}=buildWeekCards(rows,'ztl',60,true,'fecha');
   box.innerHTML=html; ids.forEach(setupZoom); wireZtlDrag();
@@ -1190,8 +1240,10 @@ function renderZoom(id){
     gl+=`<div class="gl ${t%1440===0?'day':''}" style="left:${p}%"></div>`; }
   const seg=(cls,a,b,lab,extra,ttl)=>{ const l=pos(a),r=pos(b); if(r<0||l>100) return ''; const L=Math.max(l,0),W=Math.max(Math.min(r,100)-L,0.3); return `<div class="seg ${cls} ${extra||''}" style="left:${L}%;width:${W}%" title="${ttl||lab||''}">${(r-l)>4?(lab||''):''}</div>`; };
   el.querySelector('.wtl-ruler').innerHTML=ruler;
-  el.querySelector('.lane[data-k="ponto"]').innerHTML=gl+st.ponto.map(p=>seg('ponto',p[0],p[1],hm(p[0]%1440)+'–'+hm(p[1]%1440))).join('');
-  el.querySelector('.lane[data-k="mov"]').innerHTML=gl+st.mov.map(s=>{ const hr=hm(s.a%1440)+'–'+hm(s.b%1440); const lab=(s.placa?s.placa+' · ':'')+hr; const ttl=lab+' · '+hm(s.b-s.a)+' de condução'+(s.km?' · '+Math.round(s.km)+'km':''); return seg('mov',s.a,s.b,lab,s.fora?'fora':'',ttl); }).join('')+st.almoco.map(s=>seg('almoco',s.a,s.b,'almoço')).join('');
+  const laneP=el.querySelector('.lane[data-k="ponto"]');
+  if(laneP) laneP.innerHTML=gl+(st.ponto||[]).map(p=>seg('ponto',p[0],p[1],hm(p[0]%1440)+'–'+hm(p[1]%1440))).join('');
+  const laneM=el.querySelector('.lane[data-k="mov"]');
+  if(laneM) laneM.innerHTML=gl+(st.mov||[]).map(s=>{ const hr=hm(s.a%1440)+'–'+hm(s.b%1440); const lab=s.lab||((s.placa?s.placa+' · ':'')+hr); const ttl=lab+' · '+hm(s.b-s.a)+' de condução'+(s.km?' · '+Math.round(s.km)+'km':''); return seg('mov',s.a,s.b,lab,s.fora?'fora':'',ttl); }).join('')+(st.almoco||[]).map(s=>seg('almoco',s.a,s.b,'almoço')).join('');
   const laneAl=el.querySelector('.lane[data-k="alertas"]');
   if(laneAl){ laneAl.innerHTML=gl+(st.alertas||[]).map(al=>{ const p=pos(al.t); if(p<-1||p>101) return ''; const cls=al.niv==='A'?'alto':al.niv==='M'?'medio':'baixo'; return `<span class="amark ${cls}" style="left:${p}%" title="${hm(al.t%1440)} · ${tipoLabel(al.tipo)} · ${nivName(al.niv)}"><i>${alertaIcon(al.tipo)}</i></span>`; }).join(''); }
   const laneId=el.querySelector('.lane[data-k="ident"]');
