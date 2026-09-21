@@ -1027,6 +1027,11 @@ function renderKpis(rows){
   // ① Identificação (aderência da câmera) da seleção atual — ponderada pelas horas de condução
   let idW=0, idT=0; rows.forEach(r=>{ const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); idW+=v*w; idT+=w; } });
   const identSel = idT>0? Math.round(idW/idT) : null;
+  // Placas OK × placas p/ ação (equipamento) — pela identificação (PLACA_MOV); respeita o filtro de operação
+  let placOk=null, placAcao=null, placZero=null;
+  if(typeof PLACA_MOV!=='undefined' && PLACA_MOV){ const opF=$('#fOp').value; placOk=0; placAcao=0; placZero=0;
+    for(const pk in PLACA_MOV){ const g=PLACA_MOV[pk]; if(!g.tot) continue; if(opF && operacaoDaPlaca(pk)!==opF) continue;
+      const ader=g.idn/g.tot*100; if(g.idn===0){ placAcao++; placZero++; } else if(ader<CFG.sem){ placAcao++; } else placOk++; } }
   const opSel = $('#fOp').value;
   const K=[
     {lab:'① Identificação'+(opSel?' — '+opSel:''),val:(identSel==null?'—':identSel+'<small>%</small>'),sub:(identSel==null?'sem dado de identificação':'aderência da câmera'+(opSel?' na operação':' (frota)')),ac:(identSel==null?'var(--muted)':(identSel>=CFG.sem?'var(--good)':'var(--critical)')),tab:'semid'},
@@ -1039,6 +1044,10 @@ function renderKpis(rows){
       : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)',tab:'media'},
     {lab:'Horas extras (&gt;7h20)',val:hDec(hex).replace('h','')+'<small>h</small>',sub:motsHex+' motorista(s) acima da jornada',ac:hex>0?'var(--warning)':'var(--muted)',tab:'tabela'},
   ];
+  if(placOk!=null){ K.splice(1,0,
+    {lab:'Placas OK (câmera)',val:placOk,sub:'identificando dentro do mínimo',ac:'var(--good)',tab:'semid'},
+    {lab:'Placas p/ ação',val:placAcao,sub:(placZero?placZero+' sem NENHUMA ID · ':'')+'equipamento/sistêmico',ac:placAcao?'var(--critical)':'var(--good)',tab:'semid'}
+  ); }
   $('#kpis').innerHTML=K.map(k=>`<div class="card kpi" ${k.tab?`data-tab="${k.tab}" title="ver na aba"`:''}><div class="accent" style="background:${k.ac}"></div>
      <div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
 }
