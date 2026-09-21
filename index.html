@@ -1051,7 +1051,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
   const groups=Object.values(grp).sort((a,b)=> a.gkey<b.gkey?1:a.gkey>b.gkey?-1:a.nome.localeCompare(b.nome));
   const shown=groups.slice(0,cap); const ids=[]; const noun=mode==='fecha'?'períodos':'semanas'; const zoomTxt=mode==='fecha'?'período → dia → horas':'semana → dia → horas';
   const html=shown.map((g,i)=>{
-    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0; const placas=new Set(), dias=new Set();
+    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,semSum=0,semN=0; const placas=new Set(), dias=new Set();
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data);
       for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
@@ -1059,7 +1059,9 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       (r.almocoDrivenSegs||[]).forEach(s=>almoco.push({a:off+s.ini,b:off+s.fim}));
       alertsForRec(r).forEach(al=>{ alertas.push({t:off+al.t,niv:al.niv,tipo:al.tipo}); if(al.niv==='A')nAlto++; });
       dd+=r.horasDedoDuro||0; hpon+=r.horasPonto||0; hcond+=r.horasMov||0; hex+=r.horaExtra||0;
+      if(r.semelhanca!=null){ semSum+=r.semelhanca; semN++; }
     });
+    const identPct = semN? Math.round(semSum/semN) : null;
     ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, t0:0, t1:g.total, total:g.total};
     const meta=`<div class="meta">
       <div class="m"><span>${mode==='fecha'?'Fechamento':'Semana'}</span><b>${g.label}</b></div>
@@ -1067,6 +1069,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       <div class="m"><span>h condução</span><b style="color:${hcond>hpon+CFG.tol?'var(--serious)':'inherit'}">${hcond?hDec(hcond):'—'}</b></div>
       <div class="m"><span>Hora extra</span><b style="color:${hex>0?'var(--warning)':'inherit'}">${hex>0?hDec(hex):'—'}</b></div>
       <div class="m"><span>Dedo duro</span><b style="color:${dd>0?'var(--serious)':'inherit'}">${dd>0?hDec(dd):'—'}</b></div>
+      <div class="m"><span title="aderência da identificação facial na Trimble">Identif.</span><b style="color:${identPct==null?'var(--muted)':(identPct>=CFG.sem?'var(--good)':'var(--critical)')}">${identPct==null?'—':identPct+'%'}</b></div>
       ${alertas.length?`<div class="m"><span>Alertas</span><b style="color:${nAlto>0?'var(--critical)':'var(--warning)'}">${alertas.length}${nAlto?' · '+nAlto+' alto':''}</b></div>`:''}
       <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div>
       <div class="m"><span>Veículos</span><b style="color:${placas.size>1?'var(--serious)':'inherit'}">${placas.size||'—'}</b></div></div>`;
