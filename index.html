@@ -333,6 +333,7 @@
   </div>
   <nav class="tabs" id="tabs">
     <button data-tab="semana" class="active">Resumo semanal</button>
+    <button data-tab="aderencia">Aderência</button>
     <button data-tab="linha">Linha do tempo</button>
     <button data-tab="diverg">Divergências <span class="badge" id="badgeDiv">0</span></button>
     <button data-tab="media">Média</button>
@@ -378,6 +379,13 @@
       </div>
     </div>
     <div id="semanaBox"></div>
+  </section>
+
+  <!-- ===== ADERÊNCIA POR OPERAÇÃO ===== -->
+  <section class="view" id="view-aderencia">
+    <div class="grid kpis" id="aderKpis"></div>
+    <div class="sec-title"><h2>Aderência de identificação — por operação</h2><span>% do movimento com condutor identificado · clique numa operação para ver o resumo dela</span></div>
+    <div class="grid" id="aderBox" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))"></div>
   </section>
 
   <!-- ===== FICHA DO MOTORISTA (detalhamento — abre ao clicar numa capinha) ===== -->
@@ -1528,6 +1536,7 @@ function renderAll(){
   renderBatimento();
   renderSaude();
   renderPlacasSemId();
+  renderAderencia(rows);
   if(fichaAtual) renderFicha();   // se a ficha (detalhamento) está aberta, atualiza junto com os filtros
   const pill=$('#dataModePill'), txt=$('#dataModeTxt');
   if(REAL){ pill.classList.add('real'); txt.textContent='dados reais · '+(RECORDS.length)+' registros'; }
@@ -1581,6 +1590,37 @@ function exportSaude(){
   const lines=[head.join(';')];
   SAUDE_ROWS.forEach(r=>lines.push([r.placa,r.op,'"'+r.func+'"','"'+r.idStatus+'"',r.dias,(r.ader==null?'':r.ader),'"'+r.acao+'"'].join(';')));
   baixarCsv(lines,'saude_cameras.csv');
+}
+function renderAderencia(rows){
+  const box=$('#aderBox'), kbox=$('#aderKpis'); if(!box) return;
+  const ops={};
+  rows.forEach(r=>{ const o=r.operacao||'—'; const g=(ops[o]=ops[o]||{op:o,idW:0,idT:0,mot:new Set(),placas:new Set(),dd:0,hex:0});
+    const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); g.idW+=v*w; g.idT+=w; }
+    g.mot.add(r.motoristaEscala); ((r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[])).forEach(p=>g.placas.add(placaKey(p))); g.dd+=r.horasDedoDuro||0; g.hex+=r.horaExtra||0; });
+  const list=Object.values(ops).map(g=>({op:g.op, ident:g.idT?Math.round(g.idW/g.idT):null, motN:g.mot.size, placN:g.placas.size, dd:g.dd, hex:g.hex}))
+    .sort((a,b)=> (a.ident==null?9999:a.ident)-(b.ident==null?9999:b.ident) || b.motN-a.motN);
+  let W=0,T=0; rows.forEach(r=>{ const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); W+=v*w; T+=w; } });
+  const frota=T?Math.round(W/T):null;
+  const abaixo=list.filter(g=>g.ident!=null && g.ident<CFG.sem).length;
+  const comId=list.filter(g=>g.ident!=null).length;
+  const K=[
+    {lab:'① Aderência da frota',val:(frota==null?'—':frota+'<small>%</small>'),sub:'movimento identificado ÷ total',ac:(frota==null?'var(--muted)':(frota>=CFG.sem?'var(--good)':'var(--critical)'))},
+    {lab:'Operações',val:list.length,sub:comId+' c/ identificação',ac:'var(--s2)'},
+    {lab:'Abaixo do mínimo',val:abaixo,sub:'meta '+CFG.sem+'%',ac:abaixo>0?'var(--critical)':'var(--good)'},
+  ];
+  if(kbox) kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+  if(!list.length){ box.innerHTML='<div class="empty">Sem dados de identificação no filtro atual. Carregue o relatório de <b>Alertas</b> (UO da Trimble) e a <b>Movimentação</b>.</div>'; return; }
+  box.innerHTML=list.map(g=>{ const cor=g.ident==null?'var(--muted)':(g.ident>=CFG.sem?'var(--good)':(g.ident>=CFG.sem*0.75?'var(--warning)':'var(--critical)'));
+    return `<button class="capinha adercard" data-op="${encodeURIComponent(g.op)}">
+      <div class="cap-id" style="margin-bottom:4px"><b>${g.op}</b><small>${g.motN} motorista(s) · ${g.placN} veículo(s)</small></div>
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:32px;font-weight:760;letter-spacing:-.02em;color:${cor}">${g.ident==null?'—':g.ident+'%'}</span><span style="font-size:11px;color:var(--muted)">aderência</span></div>
+      <div style="height:8px;background:var(--surface-2);border-radius:5px;overflow:hidden;margin:8px 0 4px"><div style="height:100%;width:${g.ident||0}%;background:${cor}"></div></div>
+      <div class="cap-metrics">
+        <div class="cm"><span>Dedo duro</span><b class="${g.dd>0?'bad':''}">${g.dd>0?hDec(g.dd):'0h'}</b></div>
+        <div class="cm"><span>Hora extra</span><b class="${g.hex>0?'bad':''}">${g.hex>0?hDec(g.hex):'0h'}</b></div>
+      </div>
+      <span class="cap-cta">ver resumo da operação →</span>
+    </button>`; }).join('');
 }
 let SEMID_ROWS=[];
 function renderPlacasSemId(){
@@ -2227,6 +2267,8 @@ $('#kpis').addEventListener('click',e=>{ const c=e.target.closest('.kpi[data-tab
 function focusRecord(mot, dia){ ['#fFecha','#fOp','#fStatus'].forEach(s=>$(s).value=''); $('#fBusca').value=''; $('#fDe').value=''; $('#fAte').value=''; $('#fMot').value=mot; $('#fDia').value=dia; renderAll(); goTab('linha'); }
 // clicar num apontamento das Divergências → linha do tempo daquele motorista+dia
 $('#divList').addEventListener('click',e=>{ const c=e.target.closest('.divcard'); if(!c)return; focusRecord(decodeURIComponent(c.dataset.mot), c.dataset.dia); });
+// clicar numa operação na aba Aderência → Resumo dessa operação
+$('#aderBox').addEventListener('click',e=>{ const c=e.target.closest('.adercard'); if(!c)return; $('#fOp').value=decodeURIComponent(c.dataset.op); renderAll(); goTab('semana'); });
 // capinha do motorista → detalhamento (ficha)
 $('#semanaBox').addEventListener('click',e=>{ const c=e.target.closest('.capinha'); if(!c)return; openFicha(decodeURIComponent(c.dataset.mot)); });
 $('#fichaBack').onclick=voltarResumo;
