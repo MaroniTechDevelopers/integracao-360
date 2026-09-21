@@ -134,6 +134,8 @@
   .kpi[data-tab]{cursor:pointer}
   .kpi[data-tab]::after{content:"↗";position:absolute;top:9px;right:11px;font-size:12px;color:var(--muted);opacity:.45;transition:opacity .15s,color .15s}
   .kpi[data-tab]:hover::after{opacity:1;color:var(--gold-2)}
+  .divcard{transition:box-shadow .15s,transform .15s,border-color .15s}
+  .divcard:hover{box-shadow:var(--shadow-lg);transform:translateY(-1px);border-color:var(--gold)}
   .kpi:hover{box-shadow:var(--shadow-lg); transform:translateY(-2px)}
   .kpi .lab{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;font-weight:600;letter-spacing:.01em}
   .kpi .val{font-size:33px;font-weight:760;letter-spacing:-.03em;margin:9px 0 3px;line-height:1;color:var(--ink)}
@@ -1447,7 +1449,7 @@ function renderDiverg(rows){
   if(!items.length){ $('#divList').innerHTML='<div class="empty">Nenhuma divergência ou pendência no filtro atual. ✔️</div>'; return; }
   const CAP=250, shown=items.slice(0,CAP);
   $('#divList').innerHTML = shown.map(({r,f})=>`
-    <div class="card" style="display:flex;gap:14px;align-items:center;padding:13px 16px">
+    <div class="card divcard" data-mot="${encodeURIComponent(r.motoristaEscala)}" data-dia="${r.data}" title="ver na linha do tempo" style="display:flex;gap:14px;align-items:center;padding:13px 16px;cursor:pointer">
       <span class="status ${f.sev}" style="flex:none"><span class="d"></span>${SEV_LABEL[f.sev]||f.sev}</span>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600">${f.t}</div>
@@ -1456,6 +1458,7 @@ function renderDiverg(rows){
       <div style="font-size:12px;text-align:right;color:var(--muted);flex:none">
         Ponto ${r.entrada!=null?hm(r.entrada)+'–'+hm(r.saida):'—'}<br>Direção ${r.primMov!=null?hm(r.primMov)+'–'+hm(r.ultMov):'—'}
       </div>
+      <span style="flex:none;color:var(--gold-2);font-size:14px">↗</span>
     </div>`).join('') + (items.length>CAP?`<div class="empty">Mostrando ${CAP} de ${items.length.toLocaleString('pt-BR')} — filtre por operação, motorista ou situação.</div>`:'');
 }
 
@@ -2198,6 +2201,10 @@ $('#tabs').addEventListener('click',e=>{ const b=e.target.closest('button'); if(
   $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+b.dataset.tab)); window.scrollTo(0,0); });
 // KPIs clicáveis → abrem a aba que detalha a informação
 $('#kpis').addEventListener('click',e=>{ const c=e.target.closest('.kpi[data-tab]'); if(!c)return; goTab(c.dataset.tab); });
+// foca um registro (motorista+dia) na Linha do tempo
+function focusRecord(mot, dia){ ['#fFecha','#fOp','#fStatus'].forEach(s=>$(s).value=''); $('#fBusca').value=''; $('#fDe').value=''; $('#fAte').value=''; $('#fMot').value=mot; $('#fDia').value=dia; renderAll(); goTab('linha'); }
+// clicar num apontamento das Divergências → linha do tempo daquele motorista+dia
+$('#divList').addEventListener('click',e=>{ const c=e.target.closest('.divcard'); if(!c)return; focusRecord(decodeURIComponent(c.dataset.mot), c.dataset.dia); });
 // capinha do motorista → detalhamento (ficha)
 $('#semanaBox').addEventListener('click',e=>{ const c=e.target.closest('.capinha'); if(!c)return; openFicha(decodeURIComponent(c.dataset.mot)); });
 $('#fichaBack').onclick=voltarResumo;
