@@ -171,6 +171,7 @@
   .seg{position:absolute;top:2px;bottom:2px;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;font-size:10px;font-weight:600;color:#fff;padding:0 5px;min-width:2px}
   .seg.ponto{background:color-mix(in srgb,var(--track-ponto) 82%,#000 4%);color:#3a2e00}
   .seg.mov{background:var(--track-mov)}
+  .seg.mov.unid{background:repeating-linear-gradient(45deg,var(--track-id-bad),var(--track-id-bad) 5px,color-mix(in srgb,var(--track-id-bad) 55%,#000) 5px,color-mix(in srgb,var(--track-id-bad) 55%,#000) 10px);color:#fff}
   .seg.idok{background:var(--track-id-ok)}
   .seg.idbad{background:var(--track-id-bad)}
   .seg.fora{outline:2px dashed var(--serious);outline-offset:-2px}
@@ -1126,13 +1127,14 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
   const grp={};
   rows.forEach(r=>{
     let gkey,start,total,label;
-    if(mode==='fecha'){ const f=fechamento(r.data); if(!f) return; gkey=f.key; start=f.start; total=fechaMin(f); label=f.label; }
+    if(mode==='dia'){ gkey=r.data; start=r.data; total=1440; label=brDate(r.data); }
+    else if(mode==='fecha'){ const f=fechamento(r.data); if(!f) return; gkey=f.key; start=f.start; total=fechaMin(f); label=f.label; }
     else { gkey=r.semKey; start=r.semKey; total=WEEK; label=r.semana+' · '+r.mesLabel; }
     const k=r.motoristaEscala+'|'+gkey;
     const g=(grp[k]=grp[k]||{nome:r.motoristaEscala,gkey,start,total,label,recs:[]}); g.recs.push(r);
   });
   const groups=Object.values(grp).sort((a,b)=> a.gkey<b.gkey?1:a.gkey>b.gkey?-1:a.nome.localeCompare(b.nome));
-  const shown=groups.slice(0,cap); const ids=[]; const noun=mode==='fecha'?'períodos':'semanas'; const zoomTxt=mode==='fecha'?'período → dia → horas':'semana → dia → horas';
+  const shown=groups.slice(0,cap); const ids=[]; const noun=mode==='fecha'?'períodos':(mode==='dia'?'dias':'semanas'); const zoomTxt=mode==='dia'?'dia → horas':(mode==='fecha'?'período → dia → horas':'semana → dia → horas');
   const html=shown.map((g,i)=>{
     const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,semSum=0,semN=0; const placas=new Set(), dias=new Set();
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data);
@@ -1148,7 +1150,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
     const identPct = semN? Math.round(semSum/semN) : null;
     ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, ident, t0:0, t1:g.total, total:g.total};
     const meta=`<div class="meta">
-      <div class="m"><span>${mode==='fecha'?'Fechamento':'Semana'}</span><b>${g.label}</b></div>
+      <div class="m"><span>${mode==='fecha'?'Fechamento':(mode==='dia'?'Dia':'Semana')}</span><b>${g.label}</b></div>
       <div class="m"><span>h ponto</span><b>${hpon?hDec(hpon):'—'}</b></div>
       <div class="m"><span>h condução</span><b style="color:${hcond>hpon+CFG.tol?'var(--serious)':'inherit'}">${hcond?hDec(hcond):'—'}</b></div>
       <div class="m"><span>Hora extra</span><b style="color:${hex>0?'var(--warning)':'inherit'}">${hex>0?hDec(hex):'—'}</b></div>
@@ -1179,31 +1181,39 @@ function buildPlacaCards(placaQ, prefix, cap){
   const pk0=placaKey(placaQ);
   const rP=r=>(r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[]);
   const fe=$('#fFecha').value, op=$('#fOp').value, de=$('#fDe').value, ate=$('#fAte').value, dia=$('#fDia').value;
-  const recs=RECORDS.filter(r=>{
-    if(!rP(r).some(p=>placaKey(p).includes(pk0))) return false;
-    if(fe){ const f=fechamento(r.data); if(!f||f.key!==fe) return false; }
-    if(op && r.operacao!==op) return false;
-    if(dia && r.data!==dia) return false;
-    if(de && r.data<de) return false; if(ate && r.data>ate) return false;
-    return true;
-  });
+  const passDia=d=>{ if(fe){const f=fechamento(d); if(!f||f.key!==fe) return false;} if(dia&&d!==dia) return false; if(de&&d<de) return false; if(ate&&d>ate) return false; return true; };
+  // PLACA|DIA → {placa,data,id:[{ini,fim,km,drv}], un:[[ini,fim]]}
+  const PD={}; const getPD=(pl,d)=>{ const k=pl+'|'+d; return (PD[k]=PD[k]||{placa:pl,data:d,id:[],un:[]}); };
+  // identificado (dos registros — mostra a movimentação da placa mesmo que o motorista não bata com a busca)
+  RECORDS.forEach(r=>{ const pl=rP(r).map(placaKey).find(p=>p.includes(pk0)); if(!pl) return; if(!passDia(r.data)) return; if(op && r.operacao!==op) return;
+    const g=getPD(pl,r.data); r.mov.forEach(s=> g.id.push({ini:s.ini,fim:s.fim,km:s.km||0,drv:r.motoristaEscala}) );
+    if(!MOV_UNSEG_STORE && r.movUnid) r.movUnid.forEach(s=> g.un.push([s.ini,s.fim]) ); });
+  // sem identificação (do store por placa|dia — inclui placas sem NENHUM condutor identificado)
+  if(MOV_UNSEG_STORE){ for(const key in MOV_UNSEG_STORE){ const i=key.indexOf('|'), pk=key.slice(0,i), d=key.slice(i+1); if(!pk.includes(pk0)) continue; if(!passDia(d)) continue; if(op){ const o=operacaoDaPlaca(pk); if(o && o!==op) continue; } const g=getPD(pk,d); MOV_UNSEG_STORE[key].forEach(s=>g.un.push(s)); } }
+  // agrupa por placa+fechamento (ou por placa+dia quando um dia está filtrado)
+  const dayF=dayFilter();
   const grp={};
-  recs.forEach(r=>{ const pl=rP(r).map(placaKey).find(p=>p.includes(pk0))||pk0; const f=fechamento(r.data)||{key:r.semKey,start:r.semKey,end:r.data,label:r.semana}; const total=f.start?fechaMin(f):WEEK; const k=pl+'|'+f.key; const g=(grp[k]=grp[k]||{placa:pl,start:f.start,total,label:f.label,recs:[]}); g.recs.push(r); });
+  Object.values(PD).forEach(pd=>{ let start,total,label,gk;
+    if(dayF){ start=pd.data; total=1440; label=brDate(pd.data); gk=pd.data; }
+    else { const f=fechamento(pd.data)||{key:pd.data.slice(0,7),start:pd.data,end:pd.data,label:pd.data}; start=f.start; total=f.start?fechaMin(f):WEEK; label=f.label; gk=f.key; }
+    const k=pd.placa+'|'+gk; const g=(grp[k]=grp[k]||{placa:pd.placa,start,total,label,days:[]}); g.days.push(pd); });
   const groups=Object.values(grp).sort((a,b)=> a.label<b.label?1:a.label>b.label?-1:a.placa.localeCompare(b.placa));
   const shown=groups.slice(0,cap); const ids=[];
-  const html=shown.map((g,i)=>{
-    const id=prefix+i; ids.push(id); const mov=[],ident=[]; let km=0; const drivers=new Set(), dias=new Set();
-    g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data);
-      r.mov.forEach(s=>{ if(!placaKey(s.placa||'').includes(pk0) && (r.placas||[]).length>1) return; mov.push({a:off+s.ini,b:off+s.fim,km:s.km,lab:firstName(r.motoristaEscala)+' · '+hm(s.ini%1440)+'–'+hm(s.fim%1440)}); ident.push({a:off+s.ini,b:off+s.fim,ok:true}); km+=s.km||0; drivers.add(r.motoristaEscala); });
-      (r.movUnid||[]).forEach(s=> ident.push({a:off+s.ini,b:off+s.fim,ok:false}));
+  const html=shown.map((g,idx)=>{
+    const id=prefix+idx; ids.push(id); const mov=[],ident=[]; let km=0,idMin=0,unMin=0; const drivers=new Set(), dias=new Set();
+    g.days.forEach(pd=>{ const dIdx=Math.round((Date.parse(pd.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(pd.data);
+      pd.id.forEach(s=>{ mov.push({a:off+s.ini,b:off+s.fim,km:s.km,lab:firstName(s.drv)+' · '+hm(s.ini%1440)+'–'+hm(s.fim%1440)}); ident.push({a:off+s.ini,b:off+s.fim,ok:true}); km+=s.km; drivers.add(s.drv); idMin+=(s.fim-s.ini); });
+      pd.un.forEach(s=>{ mov.push({a:off+s[0],b:off+s[1],lab:'sem ID · '+hm(s[0]%1440)+'–'+hm(s[1]%1440),unid:true}); ident.push({a:off+s[0],b:off+s[1],ok:false}); unMin+=(s[1]-s[0]); });
     });
     ZTL[id]={weekStart:g.start, ponto:[], mov, almoco:[], alertas:[], ident, t0:0, t1:g.total, total:g.total};
+    const ader = (idMin+unMin)>0? Math.round(idMin/(idMin+unMin)*100) : null;
     const meta=`<div class="meta">
       <div class="m"><span>Fechamento</span><b>${g.label}</b></div>
       <div class="m"><span>Dias c/ mov.</span><b>${dias.size}</b></div>
-      <div class="m"><span>Motoristas</span><b style="color:${drivers.size>1?'var(--serious)':'inherit'}">${drivers.size||'—'}</b></div>
+      <div class="m"><span>Identif.</span><b style="color:${ader==null?'var(--muted)':(ader>=CFG.sem?'var(--good)':'var(--critical)')}">${ader==null?'—':ader+'%'}</b></div>
+      <div class="m"><span>Motoristas</span><b style="color:${drivers.size>1?'var(--serious)':(drivers.size?'inherit':'var(--critical)')}">${drivers.size||'—'}</b></div>
       <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div></div>`;
-    return `<div class="card wtl-card"><div class="tl-head"><div class="who"><b>🚚 ${g.placa}</b><small>${[...drivers].map(firstName).join(', ')||'sem condutor identificado'}</small></div>${meta}</div>
+    return `<div class="card wtl-card"><div class="tl-head"><div class="who"><b>🚚 ${g.placa}</b><small>${[...drivers].map(firstName).join(', ')||'⚠ sem condutor identificado'}</small></div>${meta}</div>
       <div class="wtl" id="${id}">
         <div class="wtl-ruler"></div>
         <div class="track"><span class="tlab">Direção</span><div class="lane" data-k="mov"></div></div>
@@ -1214,20 +1224,25 @@ function buildPlacaCards(placaQ, prefix, cap){
   }).join('') || '<div class="empty">Nenhuma movimentação registrada para essa placa no filtro atual.</div>';
   return {html, ids};
 }
+// dia único selecionado (filtro Dia, ou De===Até) — p/ a linha do tempo focar só naquele dia
+function dayFilter(){ const d=$('#fDia').value; if(d) return d; const de=$('#fDe').value, ate=$('#fAte').value; if(de&&ate&&de===ate) return de; return ''; }
 function renderTimelines(rows){
   const box=$('#timelines');
   // modo placa: se a busca casa com uma placa (e não com um nome), mostra a movimentação da placa
-  const q=$('#fBusca').value.trim(); const qn=norm(q), qk=placaKey(q);
+  const q=$('#fBusca').value.trim(); const qn=norm(q), qk=placaKey(q); const dayF=dayFilter();
   const isName = qn && RECORDS.some(r=>norm(r.motoristaEscala).includes(qn));
-  const isPlaca = qk.length>=4 && !isName && RECORDS.some(r=>((r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[])).some(p=>placaKey(p).includes(qk)));
+  const inRecs = RECORDS.some(r=>((r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[])).some(p=>placaKey(p).includes(qk)));
+  const inPlacaMov = PLACA_MOV && Object.keys(PLACA_MOV).some(p=>p.includes(qk));
+  const isPlaca = qk.length>=4 && !isName && (inRecs||inPlacaMov);
   if(isPlaca){
     const {html,ids}=buildPlacaCards(q,'ztl',60);
     box.innerHTML='<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)">🚚 <b>Modo placa</b>: movimentação da placa <b>'+q.toUpperCase()+'</b> (todos os condutores) · <span style="color:var(--good-ink)">verde = identificado</span> · <span style="color:var(--crit-ink)">vermelho = sem identificação</span></div>'+html;
     ids.forEach(setupZoom); wireZtlDrag(); return;
   }
   if(!rows.length){ box.innerHTML='<div class="empty">Nenhum registro para o filtro atual.</div>'; for(const k in ZTL) if(k.indexOf('ztl')===0) delete ZTL[k]; return; }
-  const {html,ids}=buildWeekCards(rows,'ztl',60,true,'fecha');
-  box.innerHTML=html; ids.forEach(setupZoom); wireZtlDrag();
+  const {html,ids}=buildWeekCards(rows,'ztl',60,true, dayF?'dia':'fecha');
+  box.innerHTML=(dayF?'<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)">📅 <b>Dia '+brDate(dayF)+'</b>: linha do tempo só desse dia (00:00–24:00)</div>':'')+html;
+  ids.forEach(setupZoom); wireZtlDrag();
 }
 function renderZoom(id){
   const st=ZTL[id], el=document.getElementById(id); if(!st||!el) return;
@@ -1243,7 +1258,7 @@ function renderZoom(id){
   const laneP=el.querySelector('.lane[data-k="ponto"]');
   if(laneP) laneP.innerHTML=gl+(st.ponto||[]).map(p=>seg('ponto',p[0],p[1],hm(p[0]%1440)+'–'+hm(p[1]%1440))).join('');
   const laneM=el.querySelector('.lane[data-k="mov"]');
-  if(laneM) laneM.innerHTML=gl+(st.mov||[]).map(s=>{ const hr=hm(s.a%1440)+'–'+hm(s.b%1440); const lab=s.lab||((s.placa?s.placa+' · ':'')+hr); const ttl=lab+' · '+hm(s.b-s.a)+' de condução'+(s.km?' · '+Math.round(s.km)+'km':''); return seg('mov',s.a,s.b,lab,s.fora?'fora':'',ttl); }).join('')+(st.almoco||[]).map(s=>seg('almoco',s.a,s.b,'almoço')).join('');
+  if(laneM) laneM.innerHTML=gl+(st.mov||[]).map(s=>{ const hr=hm(s.a%1440)+'–'+hm(s.b%1440); const lab=s.lab||((s.placa?s.placa+' · ':'')+hr); const ttl=lab+' · '+hm(s.b-s.a)+(s.unid?' · SEM identificação':' de condução')+(s.km?' · '+Math.round(s.km)+'km':''); return seg('mov',s.a,s.b,lab,s.unid?'unid':(s.fora?'fora':''),ttl); }).join('')+(st.almoco||[]).map(s=>seg('almoco',s.a,s.b,'almoço')).join('');
   const laneAl=el.querySelector('.lane[data-k="alertas"]');
   if(laneAl){ laneAl.innerHTML=gl+(st.alertas||[]).map(al=>{ const p=pos(al.t); if(p<-1||p>101) return ''; const cls=al.niv==='A'?'alto':al.niv==='M'?'medio':'baixo'; return `<span class="amark ${cls}" style="left:${p}%" title="${hm(al.t%1440)} · ${tipoLabel(al.tipo)} · ${nivName(al.niv)}"><i>${alertaIcon(al.tipo)}</i></span>`; }).join(''); }
   const laneId=el.querySelector('.lane[data-k="ident"]');
@@ -1359,7 +1374,8 @@ function renderFicha(){
   const semel=semArr.length?Math.round(semArr.reduce((a,b)=>a+b,0)/semArr.length):null;
   const op=[...new Set(recs.map(r=>r.operacao))].join(', ');
   const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
-  const wk=buildWeekCards(recs,'fztl',12,false);   // evidência semanal com zoom
+  const _dayF=dayFilter(); const _recsEvid=_dayF?recs.filter(r=>r.data===_dayF):recs;
+  const wk=buildWeekCards(_recsEvid,'fztl',12,false,_dayF?'dia':'week');   // evidência (dia único se filtrado; senão semanal) com zoom
   const alR=alertasResumo(nome); const totAl=alR.total;
   const tempo=tempoDeCasa(d.admissao);
   const kmR=recs.reduce((a,r)=>a+(r.km||0),0), litrosR=recs.reduce((a,r)=>a+(r.litros||0),0);
@@ -1766,6 +1782,8 @@ let MOV_N=0;
 let MOV_TOT={}, MOV_IDN={}, MOV_UNSEG={};   // MOV_UNSEG: placa|dia → trechos [ini,fim] de movimento SEM condutor identificado
 // resumo por PLACA: {tot,idn(min),dias,diasId,ult} — inclui placas que se moveram SEM condutor identificado (persistido em RAW.placaId)
 let PLACA_MOV=null;
+// trechos de movimento SEM identificação, por placa|dia (mesclados, p/ desenhar no modo placa) — persistido em RAW.movUnseg
+let MOV_UNSEG_STORE=null;
 function aderDe(placas, data){ let tot=0,idn=0; (placas||[]).forEach(p=>{ const pk=placaKey(p)+'|'+data; tot+=MOV_TOT[pk]||0; idn+=MOV_IDN[pk]||0; }); return tot>0? Math.round(idn/tot*100) : null; }
 // JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia)
 function parseJornada(P){
@@ -1842,8 +1860,11 @@ function finalizeRecords(jor, movRaw, movRows, pontoRows){
   MOV_N=movRows;
   // resumo por placa (inclui placas que moveram SEM condutor identificado)
   PLACA_MOV={}; for(const k in MOV_TOT){ const s=k.indexOf('|'), pk=k.slice(0,s), d=k.slice(s+1); const g=(PLACA_MOV[pk]=PLACA_MOV[pk]||{tot:0,idn:0,dias:0,diasId:0,ult:''}); g.tot+=MOV_TOT[k]; const idn=MOV_IDN[k]||0; g.idn+=idn; g.dias++; if(idn>0)g.diasId++; if(d>g.ult)g.ult=d; }
+  // trechos SEM identificação por placa|dia (mesclados, cap p/ não estourar) — p/ desenhar no modo placa
+  MOV_UNSEG_STORE={}; let unTot=0; const GAPU=Math.max(CFG.movMin,10);
+  for(const k in MOV_UNSEG){ if(unTot>25000) break; const arr=MOV_UNSEG[k].slice().sort((a,b)=>a[0]-b[0]); const m=[]; arr.forEach(s=>{ const last=m[m.length-1]; if(last && s[0]-last[1]<=GAPU) last[1]=Math.max(last[1],s[1]); else { m.push([s[0],s[1]]); unTot++; } }); if(m.length) MOV_UNSEG_STORE[k]=m; }
   RAW={ records, bases:{ponto:!!pontoRows,mov:!!movRows,trim:false}, counts:{ponto:pontoRows,mov:movRows,alertas:ALERTS_N} };
-  if(ALERTS) RAW.alertas=ALERTS; if(PLACA_UO) RAW.placaUO=PLACA_UO; if(PLACA_MOV) RAW.placaId=PLACA_MOV;
+  if(ALERTS) RAW.alertas=ALERTS; if(PLACA_UO) RAW.placaUO=PLACA_UO; if(PLACA_MOV) RAW.placaId=PLACA_MOV; if(MOV_UNSEG_STORE) RAW.movUnseg=MOV_UNSEG_STORE;
   REAL=true; saveData();
   build(); fillFilters(); renderAll(); updateDropStatus();
 }
@@ -2216,12 +2237,13 @@ $('#fileBoletim').addEventListener('change',e=>{ if(e.target.files[0]){ toast('P
 $('#filePedidos').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando Pedidos (arquivo grande, aguarde)…'); setTimeout(()=>loadPedidos(e.target.files[0]),30); } });
 $('#fileSaude').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo saúde das câmeras…'); loadSaude(e.target.files[0]); } });
 $('#recalc').onclick=()=>{ ingest(); };
-$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_TOT={}; MOV_IDN={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
-$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_TOT={}; MOV_IDN={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_UNSEG_STORE=null; MOV_TOT={}; MOV_IDN={}; MOV_UNSEG={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; PLACA_MOV=null; MOV_UNSEG_STORE=null; MOV_TOT={}; MOV_IDN={}; MOV_UNSEG={}; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
 
 // INIT
 if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; PLACA_UO=RAW.placaUO||null; }
 if(RAW&&RAW.placaId) PLACA_MOV=RAW.placaId;
+if(RAW&&RAW.movUnseg) MOV_UNSEG_STORE=RAW.movUnseg;
 build(); fillFilters(); renderAll(); updateDropStatus();
 </script>
 </body>
