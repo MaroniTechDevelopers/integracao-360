@@ -372,10 +372,11 @@
       <button class="btn" id="expSemana" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
     <div class="card" style="padding:11px 16px;margin-bottom:12px">
       <div class="legend">
-        <span class="lg"><span class="sw" style="background:var(--good)"></span> Verde — sem horas dedo duro</span>
-        <span class="lg"><span class="sw" style="background:var(--warning)"></span> Amarelo — até o limite</span>
-        <span class="lg"><span class="sw" style="background:var(--critical)"></span> Vermelho — acima do limite</span>
-        <span class="lg" style="margin-left:auto;color:var(--muted)">limite do farol ajustável na aba Dados</span>
+        <span class="lg"><b>Farol de risco (composto):</b></span>
+        <span class="lg"><span class="sw" style="background:var(--good)"></span> Verde — sem sinais</span>
+        <span class="lg"><span class="sw" style="background:var(--warning)"></span> Amarelo — 1 sinal</span>
+        <span class="lg"><span class="sw" style="background:var(--critical)"></span> Vermelho — 2+ sinais (ou 1 grave)</span>
+        <span class="lg" style="margin-left:auto;color:var(--muted)">sinais: identificação baixa · alertas alto · média &lt; meta · dedo duro real</span>
       </div>
     </div>
     <div id="semanaBox"></div>
@@ -946,11 +947,13 @@ function analyze(rec){
     if(hasPonto) horasDedoDuro=foraJornada;
     else if(hasMov) horasDedoDuro=horasMov;
   }
+  // dedo duro REAL = movimento fora da janela QUANDO há ponto (o "movimento sem ponto" é pendência, não infla o farol)
+  const ddReal = (BASES.ponto && BASES.mov && hasPonto) ? foraJornada : 0;
 
   return Object.assign({}, rec, {
     operacao,
     punches, entrada, saida, horasPonto, mov, movUnid, horasMov, km, litros, media, primMov, ultMov,
-    segs, trimbleMot, semelhanca, foraJornada, horasDedoDuro, horaExtra, condutorDivergente, condutorPlan, flags, sev,
+    segs, trimbleMot, semelhanca, foraJornada, horasDedoDuro, ddReal, horaExtra, condutorDivergente, condutorPlan, flags, sev,
     semana: isoWeek(rec.data), semKey:wi.key, mesKey:wi.mesKey, mesLabel:wi.mesLabel,
     pend: flags.filter(f=>f.sev==='pendente').length,
     almocoDrivenSegs, almocoDirigido, semPausa, lunch,
@@ -1053,6 +1056,19 @@ function renderKpis(rows){
 }
 
 /* ============================================================
+   FAROL COMPOSTO — combina os sinais de risco (o que é de fato crítico)
+   ============================================================ */
+function riscoComposto(m, alR){
+  const reasons=[]; let grave=false;
+  if(m.ident!=null && m.ident<CFG.sem){ reasons.push('identificação '+m.ident+'%'); if(m.ident<50) grave=true; }
+  if(m.media!=null && m.meta && m.media<m.meta) reasons.push('média '+m.media.toFixed(2).replace('.',',')+' < meta '+m.meta.toFixed(2).replace('.',','));
+  const alto=(alR&&alR.niveis&&alR.niveis.ALTO)||0; if(alto>0){ reasons.push(alto+' alerta(s) nível alto'); if(alto>=5) grave=true; }
+  const ddH=(m.ddReal||0)/60; if(ddH>=2) reasons.push('dedo duro real '+ddH.toFixed(1).replace('.',',')+'h');
+  const n=reasons.length;
+  const cls = (n>=2||grave) ? 'vermelho' : (n===1 ? 'amarelo' : 'verde');
+  return {cls, reasons, n};
+}
+/* ============================================================
    RENDER — RESUMO SEMANAL (Capivara: por operação + farol)
    ============================================================ */
 function semanaAgg(rows){
@@ -1064,15 +1080,17 @@ function semanaAgg(rows){
   const data=ops.map(op=>{
     const opRows=rows.filter(r=>r.operacao===op);
     const mots={};
-    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,placa:'',dd:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,aderSum:0,aderW:0,idDiv:0,pend:0});
-      m.dd+=r.horasDedoDuro; if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0; if(r.placa)m.placa=r.placa;
-      m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+r.horasDedoDuro;
+    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,placa:'',dd:0,ddReal:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,aderSum:0,aderW:0,idDiv:0,pend:0});
+      m.dd+=r.horasDedoDuro; m.ddReal+=(r.ddReal||0); if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0; if(r.placa)m.placa=r.placa;
+      m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+(r.ddReal||0);   // farol semanal = dedo duro REAL (fora da jornada com ponto)
       if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; }
       { const idv=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(idv!=null){ const w=(r.horasMov||1); m.aderSum+=idv*w; m.aderW+=w; } }
       if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
+    const rng=activeRange();
     Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaVeic(m.placa,op); m.alertas=d.alertas||{}; m.admissao=d.admissao;
-      m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.ident=m.aderW?Math.round(m.aderSum/m.aderW):null; m.farolUlt=farol(ultima?(m.semanas[ultima]||0):0); });
-    return { op, list:Object.values(mots).sort((a,b)=>b.dd-a.dd),
+      m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.ident=m.aderW?Math.round(m.aderSum/m.aderW):null;
+      m.risco=riscoComposto(m, alertasResumo(m.nome, rng)); m.farolUlt=m.risco.cls; });
+    return { op, list:Object.values(mots).sort((a,b)=>{ const rk={vermelho:0,amarelo:1,verde:2}; return (rk[a.risco.cls]-rk[b.risco.cls]) || b.dd-a.dd; }),
              dd:opRows.reduce((a,r)=>a+r.horasDedoDuro,0),
              motsDedo:Object.values(mots).filter(m=>m.dd>0).length };
   });
@@ -1100,7 +1118,7 @@ function capinha(m,weeks){
     <div class="cap-top">
       <span class="avatar" style="background:${FAROL_COR[m.farolUlt]}">${iniciais(m.nome)}</span>
       <div class="cap-id"><b>${firstName(m.nome)}</b><small>${tempoDeCasa(m.admissao)} de casa</small></div>
-      <span class="fdot" title="farol da última semana" style="background:${FAROL_COR[m.farolUlt]}"></span>
+      <span class="fdot" title="Risco: ${(m.risco&&m.risco.cls)||'—'}${m.risco&&m.risco.reasons.length?' — '+m.risco.reasons.join(' · '):' — sem sinais'}" style="background:${FAROL_COR[m.farolUlt]}"></span>
     </div>
     <div class="cap-metrics">
       <div class="cm"><span>Identif.</span><b class="${m.ident==null?'':(m.ident>=CFG.sem?'ok':'bad')}">${m.ident==null?'—':m.ident+'%'}</b></div>
@@ -1405,8 +1423,9 @@ function renderFicha(){
     return true; });
   const d=drv(nome);
   const {weeks}=semanaAgg(RECORDS);
-  const porSemana={}; recs.forEach(r=>porSemana[r.semKey]=(porSemana[r.semKey]||0)+r.horasDedoDuro);
+  const porSemana={}; recs.forEach(r=>porSemana[r.semKey]=(porSemana[r.semKey]||0)+(r.ddReal||0));  // farol semanal = dedo duro real
   const ddTotal=recs.reduce((a,r)=>a+r.horasDedoDuro,0);
+  const ddRealTotal=recs.reduce((a,r)=>a+(r.ddReal||0),0);
   const hexTotal=recs.reduce((a,r)=>a+(r.horaExtra||0),0);
   const diasHex=recs.filter(r=>r.horaExtra>0).length;
   const semArr=recs.map(r=>r.aderencia!=null?r.aderencia:r.semelhanca).filter(v=>v!=null);
@@ -1423,6 +1442,7 @@ function renderFicha(){
   const metaFicha = metaVeic(recs.length?(recs.find(r=>r.placa)||{}).placa:'', recs.length?recs[0].operacao:'');
   const medaOk=mediaR!=null&&mediaR>=metaFicha;
   const reco=recomendacao(tempo,mediaR,totAl,ddTotal);
+  const fichaRisco=riscoComposto({ident:semel, media:mediaR, meta:metaFicha, ddReal:ddRealTotal}, alR);
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
 
   // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
@@ -1438,7 +1458,7 @@ function renderFicha(){
   $('#fichaBox').innerHTML = `
     <div class="card" style="margin-bottom:14px">
       <div class="ficha-hero">
-        <span class="avatar" style="background:${FAROL_COR[farol(weeks.length?(porSemana[weeks[weeks.length-1].key]||0):0)]}">${iniciais(nome)}</span>
+        <span class="avatar" title="Risco: ${fichaRisco.cls}${fichaRisco.reasons.length?' — '+fichaRisco.reasons.join(' · '):' — sem sinais'}" style="background:${FAROL_COR[fichaRisco.cls]}">${iniciais(nome)}</span>
         <div style="flex:1;min-width:180px">
           <h2>${nome}</h2>
           <div class="sub">${op||'—'}${placas?' · '+placas:''} · <b>${tempo}</b> de casa · admissão ${d.admissao?brDate(d.admissao):'—'}</div>
