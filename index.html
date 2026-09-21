@@ -490,7 +490,7 @@
       </div>
       <div class="drop" id="drop-tms">
         <h3><span class="num">4</span> TMS — Veículos <span style="font-size:11px;color:var(--muted);font-weight:400">opcional</span></h3>
-        <p>Cadastro de veículos. Colunas: <code>Placa</code>, <code>Centro Resultado</code> (operação), e opcional <code>Tipo de Rodado</code>, <code>Carroceria</code>, <code>Propriedade</code>, <code>UF</code>.</p>
+        <p>Cadastro de veículos. Colunas: <code>Placa</code>, <code>Centro Resultado</code> (operação), e opcional <code>Tipo de Rodado</code>, <code>Carroceria</code>, <code>Propriedade</code>, <code>UF</code>. <b>A operação já vem da UO da Trimble (Alertas)</b> — o TMS aqui é opcional (refina/confere no batimento).</p>
         <input type="file" id="fileTms" accept=".csv,.xlsx,.xls,.txt" hidden>
         <button class="btn solid" onclick="document.getElementById('fileTms').click()">Selecionar arquivo</button>
         <div class="status-line" id="stTms">nenhum arquivo</div>
@@ -518,7 +518,7 @@
       </div>
       <div class="drop" id="drop-pedidos">
         <h3><span class="num">8</span> Relatório de Pedidos <span style="font-size:11px;color:var(--muted);font-weight:400">viagens · operação por viagem</span></h3>
-        <p>Pedidos/viagens do TMS. Colunas: <code>CPF Motoristas</code>, <code>Veículos</code>, <code>Centro Resultado</code>, <code>Data Carregamento</code>. Dá a <b>operação por viagem</b> e a divergência <b>condutor não vinculado à placa</b>. Aceita <code>.csv</code> ou <code>.zip</code>.</p>
+        <p>Pedidos/viagens do TMS. Colunas: <code>CPF Motoristas</code>, <code>Veículos</code>, <code>Centro Resultado</code>, <code>Data Carregamento</code>. <b>Opcional</b> (a operação já vem da UO da Trimble) — serve p/ a divergência <b>condutor não vinculado à placa</b> e operação por viagem. Aceita <code>.csv</code> ou <code>.zip</code>.</p>
         <input type="file" id="filePedidos" accept=".zip,.csv,.txt" hidden>
         <button class="btn solid" onclick="document.getElementById('filePedidos').click()">Selecionar arquivo</button>
         <div class="status-line" id="stPedidos">nenhum arquivo</div>
@@ -832,9 +832,9 @@ function metaDe(operacao){ if(META_FAM){ const f=opFamily(operacao); if(f && MET
 function metaVeic(placa, operacao){ if(META_PLACA && placa){ const m=META_PLACA[placaKey(placa)]; if(m!=null) return m; } return metaDe(operacao); }
 // operação de um veículo pela placa — usada quando a jornada não traz o departamento
 function operacaoDaPlaca(placa){ if(!placa) return '';
-  // prioridade: centro de resultado do TMS (por placa) > UO da Trimble (alertas)
+  // prioridade: UO da Trimble (relatório de Alertas — leve) > centro de resultado do TMS (por placa)
+  if(typeof PLACA_UO!=='undefined' && PLACA_UO){ const u=PLACA_UO[placaKey(placa)]; if(u&&u.uoCurta){ const f=opFamily(u.uoCurta); return (f&&f!=='(não-operacional)')?f:u.uoCurta; } }
   if(typeof TMS!=='undefined' && TMS){ const t=TMS[placaKey(placa)]; if(t&&t.fam && t.fam!=='(não-operacional)') return t.fam; }
-  if(typeof PLACA_UO!=='undefined' && PLACA_UO){ const u=PLACA_UO[placaKey(placa)]; if(u&&u.uoCurta) return u.uoCurta; }
   return ''; }
 // operação da VIAGEM (Pedidos), pela placa + dia — mais precisa que a do veículo (a placa muda de operação por viagem)
 function opDaViagem(placas, data){ if(typeof PED_OP==='undefined'||!PED_OP) return ''; for(const p of (placas||[])){ if(!p) continue; const c=PED_OP[placaKey(p)+'|'+data]; if(c){ const f=opFamily(c); if(f && f!=='(não-operacional)') return f; } } return ''; }
@@ -850,10 +850,10 @@ function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }c
 function analyze(rec){
   const tol=CFG.tol, movMin=CFG.movMin;
   // operação: da jornada; se vazia, deduz pela placa (alertas/TMS) — recalcula quando essas bases chegam
-  // operação do motorista: PRIORIDADE = pedido (por viagem) > centro de resultado do TMS (por placa) > departamento da jornada
+  // operação do motorista: PRIORIDADE = UO da Trimble/placa (leve) > pedido (por viagem) > departamento da jornada
   const placasR = (rec.placas&&rec.placas.length)?rec.placas:(rec.placa?[rec.placa]:[]);
-  const opPlaca = opDaViagem(placasR, rec.data) || operacaoDaPlaca(placasR[0]);
-  const operacao = opPlaca || ((rec.operacao && rec.operacao!=='—') ? rec.operacao : '—');
+  let opPlaca=''; for(const p of placasR){ opPlaca=operacaoDaPlaca(p); if(opPlaca) break; }
+  const operacao = opPlaca || opDaViagem(placasR, rec.data) || ((rec.operacao && rec.operacao!=='—') ? rec.operacao : '—');
   // --- ponto: intervalos trabalhados = pares consecutivos ---
   const punches=(rec.ponto||[]).map(toMin).filter(v=>v!=null).sort((a,b)=>a-b);
   let entrada=punches.length?punches[0]:null, saida=punches.length?punches[punches.length-1]:null;
