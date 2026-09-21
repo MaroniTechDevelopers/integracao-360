@@ -128,8 +128,7 @@
   .filterbar select:focus,.filterbar input[type=text]:focus,.filterbar input[type=date]:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
 
   /* ============ KPI ============ */
-  .kpis{grid-template-columns:repeat(6,1fr)}
-  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(178px,1fr))}
   @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{position:relative; overflow:hidden}
   .kpi:hover{box-shadow:var(--shadow-lg); transform:translateY(-2px)}
@@ -934,6 +933,12 @@ function build(){
   BASES = REAL ? Object.assign({ponto:true,mov:true,trim:false}, RAW.bases||{})
                : { ponto:true, mov:true, trim:true };
   RECORDS = base.map(analyze);
+  // operação do MOTORISTA: dias sem placa (só ponto) não resolvem a operação e ficam "—";
+  // herdam a operação predominante do condutor (dos dias em que deu p/ resolver) — assim aparecem no filtro por operação
+  const byDrv={};
+  RECORDS.forEach(r=>{ if(r.operacao && r.operacao!=='—'){ const k=norm(r.motoristaEscala); const g=(byDrv[k]=byDrv[k]||{}); g[r.operacao]=(g[r.operacao]||0)+(r.horasMov||1); } });
+  const drvOp={}; for(const k in byDrv){ let best='',bv=-1; for(const op in byDrv[k]){ if(byDrv[k][op]>bv){bv=byDrv[k][op];best=op;} } if(best)drvOp[k]=best; }
+  RECORDS.forEach(r=>{ if((!r.operacao||r.operacao==='—') && drvOp[norm(r.motoristaEscala)]) r.operacao=drvOp[norm(r.motoristaEscala)]; });
   RECORDS.sort((a,b)=> a.data<b.data?1:a.data>b.data?-1:(a.operacao.localeCompare(b.operacao)) );
 }
 
@@ -986,7 +991,12 @@ function renderKpis(rows){
     const a=motSet.map(m=>drv(m).media).filter(v=>v!=null); return a.length?a.reduce((x,y)=>x+y,0)/a.length:null; })();
   let alertKpi=null;
   if(ALERTS||BOL){ let tot=0,alto=0,nmot=0; motSet.forEach(m=>{ const a=alertasReais(m); if(a&&a.total){ tot+=a.total; nmot++; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto,nmot}; }
+  // ① Identificação (aderência da câmera) da seleção atual — ponderada pelas horas de condução
+  let idW=0, idT=0; rows.forEach(r=>{ const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); idW+=v*w; idT+=w; } });
+  const identSel = idT>0? Math.round(idW/idT) : null;
+  const opSel = $('#fOp').value;
   const K=[
+    {lab:'① Identificação'+(opSel?' — '+opSel:''),val:(identSel==null?'—':identSel+'<small>%</small>'),sub:(identSel==null?'sem dado de identificação':'aderência da câmera'+(opSel?' na operação':' (frota)')),ac:(identSel==null?'var(--muted)':(identSel>=CFG.sem?'var(--good)':'var(--critical)'))},
     {lab:'③ Horas Dedo Duro',val:hDec(dedo).replace('h','')+'<small>h</small>',sub:motsDedo+' motorista(s) c/ horas',ac:'var(--serious)'},
     {lab:'Motoristas c/ dedo duro',val:motsDedo,sub:'horas não declaradas',ac:'var(--critical)'},
     {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto',ac:'var(--critical)'},
@@ -1012,12 +1022,14 @@ function semanaAgg(rows){
   const data=ops.map(op=>{
     const opRows=rows.filter(r=>r.operacao===op);
     const mots={};
-    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,placa:'',dd:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,idDiv:0,pend:0});
+    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,placa:'',dd:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,aderSum:0,aderW:0,idDiv:0,pend:0});
       m.dd+=r.horasDedoDuro; if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0; if(r.placa)m.placa=r.placa;
       m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+r.horasDedoDuro;
-      if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; } if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
+      if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; }
+      { const idv=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(idv!=null){ const w=(r.horasMov||1); m.aderSum+=idv*w; m.aderW+=w; } }
+      if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
     Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaVeic(m.placa,op); m.alertas=d.alertas||{}; m.admissao=d.admissao;
-      m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.farolUlt=farol(ultima?(m.semanas[ultima]||0):0); });
+      m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.ident=m.aderW?Math.round(m.aderSum/m.aderW):null; m.farolUlt=farol(ultima?(m.semanas[ultima]||0):0); });
     return { op, list:Object.values(mots).sort((a,b)=>b.dd-a.dd),
              dd:opRows.reduce((a,r)=>a+r.horasDedoDuro,0),
              motsDedo:Object.values(mots).filter(m=>m.dd>0).length };
@@ -1049,6 +1061,7 @@ function capinha(m,weeks){
       <span class="fdot" title="farol da última semana" style="background:${FAROL_COR[m.farolUlt]}"></span>
     </div>
     <div class="cap-metrics">
+      <div class="cm"><span>Identif.</span><b class="${m.ident==null?'':(m.ident>=CFG.sem?'ok':'bad')}">${m.ident==null?'—':m.ident+'%'}</b></div>
       <div class="cm"><span>Média</span><b class="${medaOk?'ok':'bad'}">${medaTxt}</b></div>
       <div class="cm"><span>Dedo duro</span><b class="${m.dd>0?'bad':''}">${m.dd>0?hDec(m.dd):'0h'}</b></div>
       <div class="cm"><span>Alertas</span><b class="${totAl>=5?'bad':''}">${totAl}</b></div>
