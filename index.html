@@ -131,6 +131,9 @@
   .kpis{grid-template-columns:repeat(auto-fit,minmax(178px,1fr))}
   @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{position:relative; overflow:hidden}
+  .kpi[data-tab]{cursor:pointer}
+  .kpi[data-tab]::after{content:"↗";position:absolute;top:9px;right:11px;font-size:12px;color:var(--muted);opacity:.45;transition:opacity .15s,color .15s}
+  .kpi[data-tab]:hover::after{opacity:1;color:var(--gold-2)}
   .kpi:hover{box-shadow:var(--shadow-lg); transform:translateY(-2px)}
   .kpi .lab{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;font-weight:600;letter-spacing:.01em}
   .kpi .val{font-size:33px;font-weight:760;letter-spacing:-.03em;margin:9px 0 3px;line-height:1;color:var(--ink)}
@@ -1008,17 +1011,17 @@ function renderKpis(rows){
   const identSel = idT>0? Math.round(idW/idT) : null;
   const opSel = $('#fOp').value;
   const K=[
-    {lab:'① Identificação'+(opSel?' — '+opSel:''),val:(identSel==null?'—':identSel+'<small>%</small>'),sub:(identSel==null?'sem dado de identificação':'aderência da câmera'+(opSel?' na operação':' (frota)')),ac:(identSel==null?'var(--muted)':(identSel>=CFG.sem?'var(--good)':'var(--critical)'))},
-    {lab:'③ Horas Dedo Duro',val:hDec(dedo).replace('h','')+'<small>h</small>',sub:motsDedo+' motorista(s) c/ horas',ac:'var(--serious)'},
-    {lab:'Motoristas c/ dedo duro',val:motsDedo,sub:'horas não declaradas',ac:'var(--critical)'},
-    {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto',ac:'var(--critical)'},
-    {lab:'Ponto sem movimento',val:pontoSemMov,sub:'bateu ponto e não dirigiu',ac:'var(--warning)'},
+    {lab:'① Identificação'+(opSel?' — '+opSel:''),val:(identSel==null?'—':identSel+'<small>%</small>'),sub:(identSel==null?'sem dado de identificação':'aderência da câmera'+(opSel?' na operação':' (frota)')),ac:(identSel==null?'var(--muted)':(identSel>=CFG.sem?'var(--good)':'var(--critical)')),tab:'semid'},
+    {lab:'③ Horas Dedo Duro',val:hDec(dedo).replace('h','')+'<small>h</small>',sub:motsDedo+' motorista(s) c/ horas',ac:'var(--serious)',tab:'diverg'},
+    {lab:'Motoristas c/ dedo duro',val:motsDedo,sub:'horas não declaradas',ac:'var(--critical)',tab:'diverg'},
+    {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto',ac:'var(--critical)',tab:'diverg'},
+    {lab:'Ponto sem movimento',val:pontoSemMov,sub:'bateu ponto e não dirigiu',ac:'var(--warning)',tab:'tabela'},
     alertKpi
-      ? {lab:'⚠ Alertas (câmera/telemetria)',val:alertKpi.tot.toLocaleString('pt-BR'),sub:(alertKpi.alto?alertKpi.alto+' motorista(s) c/ nível alto':alertKpi.nmot+' motorista(s) c/ alerta'),ac:'var(--s7)'}
-      : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)'},
-    {lab:'Horas extras (&gt;7h20)',val:hDec(hex).replace('h','')+'<small>h</small>',sub:motsHex+' motorista(s) acima da jornada',ac:hex>0?'var(--warning)':'var(--muted)'},
+      ? {lab:'⚠ Alertas (câmera/telemetria)',val:alertKpi.tot.toLocaleString('pt-BR'),sub:(alertKpi.alto?alertKpi.alto+' motorista(s) c/ nível alto':alertKpi.nmot+' motorista(s) c/ alerta'),ac:'var(--s7)',tab:'linha'}
+      : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)',tab:'media'},
+    {lab:'Horas extras (&gt;7h20)',val:hDec(hex).replace('h','')+'<small>h</small>',sub:motsHex+' motorista(s) acima da jornada',ac:hex>0?'var(--warning)':'var(--muted)',tab:'tabela'},
   ];
-  $('#kpis').innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div>
+  $('#kpis').innerHTML=K.map(k=>`<div class="card kpi" ${k.tab?`data-tab="${k.tab}" title="ver na aba"`:''}><div class="accent" style="background:${k.ac}"></div>
      <div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
 }
 
@@ -2116,9 +2119,12 @@ function baixarCsv(lines,nome){
    EVENTOS / INIT
    ============================================================ */
 // tabs
+function goTab(t){ const b=document.querySelector('#tabs button[data-tab="'+t+'"]'); if(b) b.click(); }
 $('#tabs').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
   $$('#tabs button').forEach(x=>x.classList.toggle('active',x===b));
-  $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+b.dataset.tab)); });
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+b.dataset.tab)); window.scrollTo(0,0); });
+// KPIs clicáveis → abrem a aba que detalha a informação
+$('#kpis').addEventListener('click',e=>{ const c=e.target.closest('.kpi[data-tab]'); if(!c)return; goTab(c.dataset.tab); });
 // capinha do motorista → detalhamento (ficha)
 $('#semanaBox').addEventListener('click',e=>{ const c=e.target.closest('.capinha'); if(!c)return; openFicha(decodeURIComponent(c.dataset.mot)); });
 $('#fichaBack').onclick=voltarResumo;
