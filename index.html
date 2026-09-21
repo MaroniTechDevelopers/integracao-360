@@ -735,8 +735,10 @@ function alertaIcon(tipo){ const t=norm(tipo);
   if(t.indexOf('FADIGA')>=0||t.indexOf('SONO')>=0||t.indexOf('BOCEJ')>=0||t.indexOf('OLHO FECHAD')>=0) return '😴';
   if(t.indexOf('DISTRA')>=0||t.indexOf('OLHAR')>=0) return '👁️';
   if(t.indexOf('CINTO')>=0) return '🔒';
-  if(t.indexOf('COLIS')>=0||t.indexOf('IMPACT')>=0||t.indexOf('FRENAG')>=0) return '💥';
+  if(t.indexOf('FREAD')>=0||t.indexOf('FRENAG')>=0||t.indexOf('FRENAD')>=0||t.indexOf('FREIO')>=0) return '🛑';
+  if(t.indexOf('COLIS')>=0||t.indexOf('IMPACT')>=0||t.indexOf('BATID')>=0) return '💥';
   if(t.indexOf('FUM')>=0||t.indexOf('CIGARR')>=0) return '🚬';
+  if(t.indexOf('PARADO')>=0||t.indexOf('MOTOR LIGADO')>=0||t.indexOf('OCIOS')>=0||t.indexOf('MARCHA LENTA')>=0) return '⏸️';
   if(t.indexOf('AUSENTE')>=0||t.indexOf('SEM IDENT')>=0||t.indexOf('SEM_IDENT')>=0||t.indexOf('NAO IDENT')>=0) return '🙈';
   if(t.indexOf('SEM SINAL')>=0||t.indexOf('SEM_SINAL')>=0) return '📡';
   if(t.indexOf('PERMANEN')>=0||t.indexOf('PONTO')>=0) return '🅿️';
@@ -1213,10 +1215,12 @@ function renderFicha(){
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
 
   // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
-  const tiposReais=alR.real?Object.keys(alR.tipos||{}):[];
-  const alertaSubt = alR.real ? (tiposReais.map(tipoLabel).join(', ')||'sem alertas no período') : '5 tipos monitorados (demo)';
+  const tiposArr = alR.real ? Object.entries(alR.tipos||{}).sort((a,b)=>b[1]-a[1]) : [];
+  const sevLine = alR.real ? NIVEL_DEF.map(a=>`${a.ic} ${((alR.niveis&&alR.niveis[a.k])||0).toLocaleString('pt-BR')} ${a.lab.toLowerCase()}`).join(' · ') : '';
+  const alertaSubt = alR.real ? (totAl?('por tipo · severidade: '+sevLine+' · total '+totAl.toLocaleString('pt-BR')):'sem alertas no período') : '5 tipos monitorados (demo)';
+  const maxTipo = tiposArr.length?tiposArr[0][1]:0;
   const alertTiles = alR.real
-    ? NIVEL_DEF.map(a=>{ const n=(alR.niveis&&alR.niveis[a.k])||0; return `<div class="alert-tile ${a.k==='ALTO'&&n>0?'hot':''}"><div class="n">${a.ic} ${n}</div><div class="l">${a.lab}</div></div>`; }).join('')
+    ? (tiposArr.length ? tiposArr.map(([tp,n])=>`<div class="alert-tile ${n===maxTipo&&n>0?'hot':''}"><div class="n">${alertaIcon(tp)} ${n.toLocaleString('pt-BR')}</div><div class="l">${tipoLabel(tp)}</div></div>`).join('') : '<div class="empty" style="padding:16px">sem alertas no período</div>')
     : ALERTA_DEF.map(a=>{ const n=(d.alertas&&d.alertas[a.k])||0; return `<div class="alert-tile ${n>=5?'hot':''}"><div class="n">${a.ic} ${n}</div><div class="l">${a.lab}</div></div>`; }).join('');
 
   $('#fichaBox').innerHTML = `
