@@ -1365,7 +1365,15 @@ function recomendacao(anosMeses, media, totAl, dd){
 }
 function renderFicha(){
   const nome=fichaAtual; if(!nome){ $('#fichaBox').innerHTML=''; return; }
-  const recs=RECORDS.filter(r=>r.motoristaEscala===nome);
+  // respeita os filtros ativos (dia/operação/fechamento/data/situação) — os KPIs da ficha mudam conforme o filtro
+  const _fe=$('#fFecha').value, _op=$('#fOp').value, _diaF=$('#fDia').value, _de=$('#fDe').value, _ate=$('#fAte').value, _stt=$('#fStatus').value;
+  const recs=RECORDS.filter(r=>{ if(r.motoristaEscala!==nome) return false;
+    if(_fe){ const f=fechamento(r.data); if(!f||f.key!==_fe) return false; }
+    if(_op && r.operacao!==_op) return false;
+    if(_diaF && r.data!==_diaF) return false;
+    if(_de && r.data<_de) return false; if(_ate && r.data>_ate) return false;
+    if(_stt && r.sev!==_stt) return false;
+    return true; });
   const d=drv(nome);
   const {weeks}=semanaAgg(RECORDS);
   const porSemana={}; recs.forEach(r=>porSemana[r.semKey]=(porSemana[r.semKey]||0)+r.horasDedoDuro);
@@ -1429,7 +1437,7 @@ function renderFicha(){
     <div class="sec-title"><h2>Farol semanal — dedo duro</h2><span>semanas agrupadas por mês</span></div>
     <div class="card">${strip}</div>
 
-    <div class="sec-title"><h2>Evidência semanal — Ponto × Movimento</h2><span>a semana inteira · role o mouse para dar zoom (semana → dia → horas)</span></div>
+    <div class="sec-title"><h2>Evidência — Ponto × Movimento</h2><span>${_dayF?('só o dia '+brDate(_dayF)+' · role o mouse para dar zoom (dia → horas)'):'a semana inteira · role o mouse para dar zoom (semana → dia → horas)'}</span></div>
     <div class="grid">${ wk.html || '<div class="empty">Sem dias.</div>' }</div>
   `;
   wk.ids.forEach(setupZoom); wireZtlDrag();
@@ -1508,6 +1516,7 @@ function renderAll(){
   renderBatimento();
   renderSaude();
   renderPlacasSemId();
+  if(fichaAtual) renderFicha();   // se a ficha (detalhamento) está aberta, atualiza junto com os filtros
   const pill=$('#dataModePill'), txt=$('#dataModeTxt');
   if(REAL){ pill.classList.add('real'); txt.textContent='dados reais · '+(RECORDS.length)+' registros'; }
   else { pill.classList.remove('real'); txt.textContent='dados de demonstração'; }
