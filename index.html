@@ -469,6 +469,13 @@
         <button class="btn solid" onclick="document.getElementById('fileMetas').click()">Selecionar arquivo</button>
         <div class="status-line" id="stMetas">nenhum arquivo · meta única 2,40</div>
       </div>
+      <div class="drop" id="drop-boletim">
+        <h3><span class="num">7</span> Boletim do Motorista <span style="font-size:11px;color:var(--muted);font-weight:400">ocorrências · alertas por tipo</span></h3>
+        <p>Boletim do Motorista (Trimble), 1 linha por <b>motorista + dia</b>. Traz os alertas por tipo em colunas: <code>Uso de Celular</code>, <code>Fadiga</code>, <code>Distração</code>, <code>Sem Cinto</code>, <code>Freada</code>, <code>Excesso Velocidade</code>, <code>Parado Ligado</code>… Alimenta os <b>blocos por tipo</b> da ficha. Aceita <code>.csv</code> ou <code>.zip</code>.</p>
+        <input type="file" id="fileBoletim" accept=".zip,.csv,.txt" hidden>
+        <button class="btn solid" onclick="document.getElementById('fileBoletim').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stBoletim">nenhum arquivo</div>
+      </div>
     </div>
 
     <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
@@ -685,7 +692,10 @@ function mediaDe(nome){ if(ABAST){ const a=ABAST[norm(nome)]; if(a&&a.media!=nul
   let km=0,l=0; for(const r of RECORDS){ if(r.motoristaEscala===nome){ km+=r.km||0; l+=r.litros||0; } } return l>0? km/l : (drv(nome).media!=null?drv(nome).media:null); }
 const NIVEL_DEF=[{k:'ALTO',lab:'Alto',ic:'🔴'},{k:'MEDIO',lab:'Médio',ic:'🟠'},{k:'BAIXO',lab:'Baixo',ic:'🟡'}];
 function tipoLabel(t){ return String(t||'').replace(/_/g,' ').toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase()); }
-function alertasReais(nome){ return ALERTS? (ALERTS[norm(nome)]||null) : null; }
+// alertas reais de um motorista — Boletim (todos os tipos) tem prioridade; herda a severidade do relatório de Alertas se houver
+function alertasReais(nome){ const nn=norm(nome); const b=BOL&&BOL[nn], a=ALERTS&&ALERTS[nn];
+  if(b) return {nome, total:b.total, tipos:b.tipos||{}, niveis:(a&&a.niveis)||{}, semanas:(a&&a.semanas)||{}};
+  return a||null; }
 // resumo de alertas de um motorista — usa o relatório real se carregado; senão o cadastro demo
 function alertasResumo(nome){
   const real=alertasReais(nome);
@@ -693,7 +703,7 @@ function alertasResumo(nome){
     const badges=NIVEL_DEF.filter(d=>real.niveis[d.k]).map(d=>({lab:d.lab,ic:d.ic,n:real.niveis[d.k],hot:d.k==='ALTO'}));
     return {total:real.total, badges, real:true, niveis:real.niveis, tipos:real.tipos};
   }
-  if(ALERTS) return {total:0, badges:[], real:true, niveis:{}, tipos:{}};   // relatório real carregado, motorista sem alertas
+  if(ALERTS||BOL) return {total:0, badges:[], real:true, niveis:{}, tipos:{}};   // relatório real carregado, motorista sem alertas
   const al=drv(nome).alertas||{};
   const badges=ALERTA_DEF.filter(d=>(al[d.k]||0)>0).map(d=>({lab:d.lab,ic:d.ic,n:al[d.k],hot:(al[d.k]||0)>=5}));
   return {total:totAlertas(al), badges, real:false};
@@ -719,6 +729,7 @@ let RECORDS = [];           // registros motorista-dia já com análise
 let BASES = {ponto:true, mov:true, trim:true};   // quais das 3 fontes estão carregadas
 let ALERTS = null;          // agregado de alertas por motorista (norm) — do relatório de alertas
 let AL_TL = null;           // motorista(norm) → [ [dataISO, minutos, nivelChar, tipo] ] — horário exato p/ a linha do tempo (só em memória)
+let BOL = null, BOL_N = 0;  // Boletim do Motorista: motorista(norm) → {nome,total,tipos,dias,km,litros,media,dep} — alertas por tipo por motorista
 // motoristas presentes nos registros (p/ escopar os alertas da timeline e poupar memória)
 function namesOfInterest(){ const s=new Set(); (RECORDS||[]).forEach(r=>{ if(r.motoristaEscala) s.add(norm(r.motoristaEscala)); }); return s.size?s:null; }
 // alertas com horário de um registro motorista-dia (demo usa r.alertasTimed; real usa AL_TL)
@@ -919,14 +930,14 @@ function renderKpis(rows){
     let km=0,l=0; rows.forEach(r=>{km+=r.km||0;l+=r.litros||0;}); if(l>0) return km/l;
     const a=motSet.map(m=>drv(m).media).filter(v=>v!=null); return a.length?a.reduce((x,y)=>x+y,0)/a.length:null; })();
   let alertKpi=null;
-  if(ALERTS){ let tot=0,alto=0; motSet.forEach(m=>{ const a=alertasReais(m); if(a){ tot+=a.total; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto}; }
+  if(ALERTS||BOL){ let tot=0,alto=0,nmot=0; motSet.forEach(m=>{ const a=alertasReais(m); if(a&&a.total){ tot+=a.total; nmot++; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto,nmot}; }
   const K=[
     {lab:'③ Horas Dedo Duro',val:hDec(dedo).replace('h','')+'<small>h</small>',sub:motsDedo+' motorista(s) c/ horas',ac:'var(--serious)'},
     {lab:'Motoristas c/ dedo duro',val:motsDedo,sub:'horas não declaradas',ac:'var(--critical)'},
     {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto',ac:'var(--critical)'},
     {lab:'Ponto sem movimento',val:pontoSemMov,sub:'bateu ponto e não dirigiu',ac:'var(--warning)'},
     alertKpi
-      ? {lab:'⚠ Alertas de velocidade',val:alertKpi.tot.toLocaleString('pt-BR'),sub:alertKpi.alto+' motorista(s) c/ nível alto',ac:'var(--s7)'}
+      ? {lab:'⚠ Alertas (câmera/telemetria)',val:alertKpi.tot.toLocaleString('pt-BR'),sub:(alertKpi.alto?alertKpi.alto+' motorista(s) c/ nível alto':alertKpi.nmot+' motorista(s) c/ alerta'),ac:'var(--s7)'}
       : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)'},
     {lab:'Horas extras (&gt;7h20)',val:hDec(hex).replace('h','')+'<small>h</small>',sub:motsHex+' motorista(s) acima da jornada',ac:hex>0?'var(--warning)':'var(--muted)'},
   ];
@@ -1219,8 +1230,9 @@ function renderFicha(){
 
   // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
   const tiposArr = alR.real ? Object.entries(alR.tipos||{}).sort((a,b)=>b[1]-a[1]) : [];
-  const sevLine = alR.real ? NIVEL_DEF.map(a=>`${a.ic} ${((alR.niveis&&alR.niveis[a.k])||0).toLocaleString('pt-BR')} ${a.lab.toLowerCase()}`).join(' · ') : '';
-  const alertaSubt = alR.real ? (totAl?('por tipo · severidade: '+sevLine+' · total '+totAl.toLocaleString('pt-BR')):'sem alertas no período') : '5 tipos monitorados (demo)';
+  const temNiv = alR.real && alR.niveis && (alR.niveis.ALTO||alR.niveis.MEDIO||alR.niveis.BAIXO);
+  const sevLine = temNiv ? NIVEL_DEF.map(a=>`${a.ic} ${((alR.niveis&&alR.niveis[a.k])||0).toLocaleString('pt-BR')} ${a.lab.toLowerCase()}`).join(' · ') : '';
+  const alertaSubt = alR.real ? (totAl?('por tipo'+(temNiv?(' · severidade: '+sevLine):'')+' · total '+totAl.toLocaleString('pt-BR')):'sem alertas no período') : '5 tipos monitorados (demo)';
   const maxTipo = tiposArr.length?tiposArr[0][1]:0;
   const alertTiles = alR.real
     ? (tiposArr.length ? tiposArr.map(([tp,n])=>`<div class="alert-tile ${n===maxTipo&&n>0?'hot':''}"><div class="n">${alertaIcon(tp)} ${n.toLocaleString('pt-BR')}</div><div class="l">${tipoLabel(tp)}</div></div>`).join('') : '<div class="empty" style="padding:16px">sem alertas no período</div>')
@@ -1642,6 +1654,72 @@ function loadAlertas(file){
   } else { rd.onload=e=>done(decodeText(e.target.result)); rd.readAsArrayBuffer(file); }
 }
 
+/* ===== BOLETIM DO MOTORISTA (ocorrências): 1 linha por motorista+dia, alertas por tipo em COLUNAS ===== */
+const BOL_TIPOS=[
+  {c:'USO DE CELULAR', l:'Uso de Celular', k:'n'},
+  {c:'FADIGA', l:'Fadiga', k:'n'},
+  {c:'BOCEJO', l:'Bocejo', k:'n'},
+  {c:'DISTRACAO', l:'Distração', k:'n'},
+  {c:'SEM CINTO', l:'Sem Cinto', k:'n'},
+  {c:'USO DE CIGARRO', l:'Uso de Cigarro', k:'n'},
+  {c:'SEM MOTORISTA', l:'Sem Motorista', k:'n'},
+  {c:'CAMERA OBSTRUIDA', l:'Câmera Obstruída', k:'n'},
+  {c:'DISTANCIA PERIGOSA', l:'Distância Perigosa', k:'n'},
+  {c:'ACELERACAO BRUSCA', l:'Aceleração Brusca', k:'n'},
+  {c:'FRENAGEM BRUSCA', l:'Frenagem Brusca', k:'n'},
+  {c:'CURVA BRUSCA', l:'Curva Brusca', k:'n'},
+  {c:'ULTRAPASSAGEM ILEGAL', l:'Ultrapassagem Ilegal', k:'n'},
+  {c:'MANUSEIO DE OBJETO', l:'Manuseio de Objeto', k:'n'},
+  {c:'PARADA INCOMPLETA', l:'Parada Incompleta', k:'n'},
+  {c:'NAO PAROU', l:'Não Parou', k:'n'},
+  {c:'DESVIO DE ROTA', l:'Desvio de Rota', k:'n'},
+  {c:'EXCESSO DE VELOCIDADE', l:'Excesso Velocidade', k:'d'},
+  {c:'EXCESSO DE RPM', l:'Excesso RPM', k:'d'},
+  {c:'BANGUELA', l:'Banguela', k:'d'},
+  {c:'PARADO LIGADO', l:'Parado Ligado', k:'d'},
+];
+function durSec(v){ const m=String(v||'').match(/(\d+):(\d{2}):(\d{2})/); return m?(+m[1]*3600+ +m[2]*60+ +m[3]):0; }
+function aggBoletim(text){
+  text=text.replace(/^﻿/,''); const nl=text.indexOf('\n'); if(nl<0) return {A:{},n:0};
+  const first=text.slice(0,nl).replace(/\r$/,'');
+  const delim=(first.match(/;/g)||[]).length>=(first.match(/,/g)||[]).length?';':',';
+  const head=splitCSVLine(first,delim); const H={}; head.forEach((h,i)=>H[norm(h)]=i);
+  const iMot=H['MOTORISTA'], iDep=H['DEPARTAMENTO'], iKm=H['DISTANCIA PERCORRIDA'], iLit=H['CONSUMO DE COMBUSTIVEL'];
+  const cols=BOL_TIPOS.map(t=>Object.assign({},t,{idx:(H[t.c]!=null?H[t.c]:-1)}));
+  const A={}; let n=0, start=nl+1;
+  while(start<text.length){
+    let end=text.indexOf('\n',start); if(end<0) end=text.length;
+    const line=text.slice(start, text.charCodeAt(end-1)===13?end-1:end); start=end+1;
+    if(!line) continue;
+    const c=splitCSVLine(line,delim); if(iMot==null||c.length<=iMot) continue;
+    const nome=(c[iMot]||'').trim(); if(!nome) continue; const nn=norm(nome);
+    const a=(A[nn]=A[nn]||{nome, total:0, tipos:{}, dias:0, km:0, litros:0, dep:''});
+    a.dias++;
+    if(iKm!=null) a.km+=numBR(c[iKm]); if(iLit!=null) a.litros+=numBR(c[iLit]);
+    if(iDep!=null){ const d=(c[iDep]||'').trim(); if(d && norm(d)!=='SEM DEPARTAMENTO' && !a.dep) a.dep=d; }
+    cols.forEach(t=>{ if(t.idx<0) return; const v=c[t.idx]; if(!v) return;
+      const add = t.k==='d' ? (durSec(v)>0?1:0) : (parseInt(String(v).trim(),10)||0);
+      if(add>0){ a.tipos[t.l]=(a.tipos[t.l]||0)+add; a.total+=add; }
+    });
+    n++;
+  }
+  return {A,n};
+}
+function loadBoletim(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  const done=(text)=>{ try{
+      const r=aggBoletim(text); BOL=r.A; BOL_N=r.n;
+      build(); fillFilters(); updateDropStatus(); renderAll();
+      toast('Boletim ✓ '+r.n.toLocaleString('pt-BR')+' registros · '+Object.keys(r.A).length+' motoristas · alertas por tipo');
+    }catch(err){ toast('Erro ao processar o Boletim'); } };
+  const rd=new FileReader();
+  if(ext==='zip'){
+    if(typeof JSZip==='undefined'){ toast('Sem internet p/ abrir .zip'); return; }
+    rd.onload=e=>{ JSZip.loadAsync(e.target.result).then(zip=>{ const name=Object.keys(zip.files).find(f=>/\.csv$/i.test(f)); if(!name){ toast('Zip sem CSV'); return; } return zip.files[name].async('arraybuffer').then(ab=>done(decodeText(ab))); }).catch(()=>toast('Erro ao abrir o zip')); };
+    rd.readAsArrayBuffer(file);
+  } else { rd.onload=e=>done(decodeText(e.target.result)); rd.readAsArrayBuffer(file); }
+}
+
 let TMS_N=0, ABAST_N=0, META_N=0;
 // lê uma aba específica de um Excel (por nome preferido ou pelas colunas necessárias)
 function loadXlsxSheet(file, prefer, needCols, cb){
@@ -1741,7 +1819,7 @@ function batimentoRows(){
 }
 
 function updateDropStatus(){
-  const opc=['#drop-alertas','#drop-tms','#drop-abast','#drop-metas'];
+  const opc=['#drop-alertas','#drop-tms','#drop-abast','#drop-metas','#drop-boletim'];
   const set=(id,n,dropId,unit,zero)=>{ $(id).textContent = n? (n.toLocaleString('pt-BR')+' '+(unit||'linhas')+' ✓') : (zero||(opc.includes(dropId)?'nenhum arquivo':'nenhum arquivo — usando demonstração')); $(dropId).classList.toggle('loaded',!!n); };
   set('#stPonto', (pending.ponto&&pending.ponto.length)||(RAW&&RAW.counts&&RAW.counts.ponto)||0, '#drop-ponto');
   set('#stMov',   (pending.mov&&pending.mov.length)  ||(RAW&&RAW.counts&&RAW.counts.mov)  ||0, '#drop-mov');
@@ -1749,6 +1827,7 @@ function updateDropStatus(){
   set('#stTms', TMS_N, '#drop-tms', 'veículos');
   set('#stAbast', ABAST_N, '#drop-abast', 'motoristas');
   set('#stMetas', META_N, '#drop-metas', 'metas por placa', 'nenhum arquivo · meta única '+CFG.meta.toFixed(2).replace('.',','));
+  set('#stBoletim', BOL_N, '#drop-boletim', 'registros');
 }
 
 /* ============================================================
@@ -1824,9 +1903,10 @@ $('#fileAlertas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('P
 $('#fileTms').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo TMS…'); readFile(e.target.files[0],rows=>ingestTMS(rows)); } });
 $('#fileAbast').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo abastecimento (arquivo grande, aguarde)…'); setTimeout(()=>loadAbastecimento(e.target.files[0]),30); } });
 $('#fileMetas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo metas…'); loadMetas(e.target.files[0]); } });
+$('#fileBoletim').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando Boletim (arquivo grande, aguarde)…'); setTimeout(()=>loadBoletim(e.target.files[0]),30); } });
 $('#recalc').onclick=()=>{ ingest(); };
-$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
-$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
 
 // INIT
 if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; PLACA_UO=RAW.placaUO||null; }
