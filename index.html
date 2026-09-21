@@ -319,6 +319,7 @@
     <button data-tab="media">Média</button>
     <button data-tab="tabela">Consolidado</button>
     <button data-tab="operacao">Operação por placa</button>
+    <button data-tab="saude">Saúde das câmeras</button>
     <button data-tab="dados">Dados &amp; como usar</button>
   </nav>
 </header>
@@ -423,6 +424,14 @@
     <div id="opBox"></div>
   </section>
 
+  <!-- ===== SAÚDE DAS CÂMERAS ===== -->
+  <section class="view" id="view-saude">
+    <div class="grid kpis" id="saudeKpis" style="grid-template-columns:repeat(5,1fr)"></div>
+    <div class="sec-title"><h2>Saúde das câmeras — plano de manutenção</h2><span>status do equipamento × identificação real (aderência) por cavalo</span>
+      <button class="btn" id="expSaude" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
+    <div id="saudeBox"></div>
+  </section>
+
   <!-- ===== DADOS ===== -->
   <section class="view" id="view-dados">
     <div class="sec-title"><h2>Carregar os relatórios</h2><span>cruza por motorista + dia · CSV/Excel · fica neste navegador</span></div>
@@ -475,6 +484,20 @@
         <input type="file" id="fileBoletim" accept=".zip,.csv,.txt" hidden>
         <button class="btn solid" onclick="document.getElementById('fileBoletim').click()">Selecionar arquivo</button>
         <div class="status-line" id="stBoletim">nenhum arquivo</div>
+      </div>
+      <div class="drop" id="drop-pedidos">
+        <h3><span class="num">8</span> Relatório de Pedidos <span style="font-size:11px;color:var(--muted);font-weight:400">viagens · operação por viagem</span></h3>
+        <p>Pedidos/viagens do TMS. Colunas: <code>CPF Motoristas</code>, <code>Veículos</code>, <code>Centro Resultado</code>, <code>Data Carregamento</code>. Dá a <b>operação por viagem</b> e a divergência <b>condutor não vinculado à placa</b>. Aceita <code>.csv</code> ou <code>.zip</code>.</p>
+        <input type="file" id="filePedidos" accept=".zip,.csv,.txt" hidden>
+        <button class="btn solid" onclick="document.getElementById('filePedidos').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stPedidos">nenhum arquivo</div>
+      </div>
+      <div class="drop" id="drop-saude">
+        <h3><span class="num">9</span> Saúde das câmeras <span style="font-size:11px;color:var(--muted);font-weight:400">equipamentos</span></h3>
+        <p>Controle de câmeras por cavalo (Excel). Aba <code>BASE</code>: <code>CAVALO</code>, <code>OP</code>, <code>STATUS</code>, <code>FUNCIONALDADE</code>. Alimenta a aba <b>Saúde das câmeras</b> (plano de manutenção). Aceita <code>.xlsx</code>.</p>
+        <input type="file" id="fileSaude" accept=".xlsx,.xls" hidden>
+        <button class="btn solid" onclick="document.getElementById('fileSaude').click()">Selecionar arquivo</button>
+        <div class="status-line" id="stSaude">nenhum arquivo</div>
       </div>
     </div>
 
@@ -730,6 +753,10 @@ let BASES = {ponto:true, mov:true, trim:true};   // quais das 3 fontes estão ca
 let ALERTS = null;          // agregado de alertas por motorista (norm) — do relatório de alertas
 let AL_TL = null;           // motorista(norm) → [ [dataISO, minutos, nivelChar, tipo] ] — horário exato p/ a linha do tempo (só em memória)
 let BOL = null, BOL_N = 0;  // Boletim do Motorista: motorista(norm) → {nome,total,tipos,dias,km,litros,media,dep} — alertas por tipo por motorista
+let SAUDE = null, SAUDE_N = 0;   // Saúde das câmeras: placa(key) → {op,status,func,manut}
+let PED_OP = null, PED_DRV = null, PED_N = 0;   // Pedidos: placa|dia → centro de resultado (operação) e CPF do condutor planejado
+let CPF2NOME = null, NOME2CPF = null;           // de-para CPF ↔ nome (do Boletim/jornada)
+function cpfKey(v){ return String(v||'').replace(/\D+/g,''); }
 // motoristas presentes nos registros (p/ escopar os alertas da timeline e poupar memória)
 function namesOfInterest(){ const s=new Set(); (RECORDS||[]).forEach(r=>{ if(r.motoristaEscala) s.add(norm(r.motoristaEscala)); }); return s.size?s:null; }
 // alertas com horário de um registro motorista-dia (demo usa r.alertasTimed; real usa AL_TL)
@@ -770,6 +797,8 @@ function operacaoDaPlaca(placa){ if(!placa) return '';
   if(typeof TMS!=='undefined' && TMS){ const t=TMS[placaKey(placa)]; if(t&&t.fam && t.fam!=='(não-operacional)') return t.fam; }
   if(typeof PLACA_UO!=='undefined' && PLACA_UO){ const u=PLACA_UO[placaKey(placa)]; if(u&&u.uoCurta) return u.uoCurta; }
   return ''; }
+// operação da VIAGEM (Pedidos), pela placa + dia — mais precisa que a do veículo (a placa muda de operação por viagem)
+function opDaViagem(placas, data){ if(typeof PED_OP==='undefined'||!PED_OP) return ''; for(const p of (placas||[])){ if(!p) continue; const c=PED_OP[placaKey(p)+'|'+data]; if(c){ const f=opFamily(c); if(f && f!=='(não-operacional)') return f; } } return ''; }
 
 function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00,jornadaMin:440}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
 function saveCfg(){ try{ localStorage.setItem(LS.cfg, JSON.stringify(CFG)); }catch(e){} }
@@ -782,8 +811,9 @@ function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }c
 function analyze(rec){
   const tol=CFG.tol, movMin=CFG.movMin;
   // operação: da jornada; se vazia, deduz pela placa (alertas/TMS) — recalcula quando essas bases chegam
-  // operação do motorista: PRIORIDADE = centro de resultado do TMS pela placa dirigida > departamento da jornada
-  const opPlaca = operacaoDaPlaca(rec.placa||(rec.placas&&rec.placas[0]));
+  // operação do motorista: PRIORIDADE = pedido (por viagem) > centro de resultado do TMS (por placa) > departamento da jornada
+  const placasR = (rec.placas&&rec.placas.length)?rec.placas:(rec.placa?[rec.placa]:[]);
+  const opPlaca = opDaViagem(placasR, rec.data) || operacaoDaPlaca(placasR[0]);
   const operacao = opPlaca || ((rec.operacao && rec.operacao!=='—') ? rec.operacao : '—');
   // --- ponto: intervalos trabalhados = pares consecutivos ---
   const punches=(rec.ponto||[]).map(toMin).filter(v=>v!=null).sort((a,b)=>a-b);
@@ -846,6 +876,13 @@ function analyze(rec){
   if(BASES.ponto && BASES.mov && semPausa && hasMov) flags.push({sev:'atencao',t:'Jornada sem intervalo de almoço (seguiu direto)'});
   // HORA EXTRA (jornada acima de 7h20)
   if(BASES.ponto && horaExtra>0) flags.push({sev:'atencao',t:'Hora extra: '+hm(horaExtra)+' acima de 7h20 de jornada'});
+  // CONDUTOR NÃO VINCULADO À PLACA (pedido) — quem foi identificado dirigindo ≠ quem estava no pedido
+  let plannedCpf='';
+  if(typeof PED_DRV!=='undefined' && PED_DRV){ for(const p of placasR){ const cf=PED_DRV[placaKey(p)+'|'+rec.data]; if(cf){ plannedCpf=cf; break; } } }
+  const idCpf = (typeof NOME2CPF!=='undefined' && NOME2CPF) ? NOME2CPF[norm(rec.motoristaEscala)] : '';
+  let condutorDivergente=false, condutorPlan='';
+  if(plannedCpf && idCpf && plannedCpf!==idCpf){ condutorDivergente=true; condutorPlan=(typeof CPF2NOME!=='undefined'&&CPF2NOME&&CPF2NOME[plannedCpf])||('CPF '+plannedCpf); }
+  if(condutorDivergente && hasMov) flags.push({sev:'critico',t:'Condutor não vinculado à placa — pedido previa '+firstName(condutorPlan)});
 
   let sev = flags.some(f=>f.sev==='critico') ? 'critico'
           : flags.some(f=>f.sev==='atencao') ? 'atencao'
@@ -865,7 +902,7 @@ function analyze(rec){
   return Object.assign({}, rec, {
     operacao,
     punches, entrada, saida, horasPonto, mov, horasMov, km, litros, media, primMov, ultMov,
-    segs, trimbleMot, semelhanca, foraJornada, horasDedoDuro, horaExtra, flags, sev,
+    segs, trimbleMot, semelhanca, foraJornada, horasDedoDuro, horaExtra, condutorDivergente, condutorPlan, flags, sev,
     semana: isoWeek(rec.data), semKey:wi.key, mesKey:wi.mesKey, mesLabel:wi.mesLabel,
     pend: flags.filter(f=>f.sev==='pendente').length,
     almocoDrivenSegs, almocoDirigido, semPausa, lunch,
@@ -1348,9 +1385,59 @@ function renderAll(){
   renderMedia(rows);
   renderTable(rows);
   renderBatimento();
+  renderSaude();
   const pill=$('#dataModePill'), txt=$('#dataModeTxt');
   if(REAL){ pill.classList.add('real'); txt.textContent='dados reais · '+(RECORDS.length)+' registros'; }
   else { pill.classList.remove('real'); txt.textContent='dados de demonstração'; }
+}
+let SAUDE_ROWS=[];
+function renderSaude(){
+  const kbox=$('#saudeKpis'), box=$('#saudeBox');
+  if(!SAUDE){ kbox.innerHTML=''; box.innerHTML='<div class="empty">Carregue o Excel de <b>Saúde das câmeras</b> na aba <b>Dados</b> (aba BASE: CAVALO, OP, STATUS, FUNCIONALDADE) para ver o plano de manutenção.</div>'; SAUDE_ROWS=[]; return; }
+  // identificação real por placa (dos registros carregados)
+  const idBy={};
+  RECORDS.forEach(r=>{ (r.placas&&r.placas.length?r.placas:(r.placa?[r.placa]:[])).forEach(p=>{ const pk=placaKey(p); const g=(idBy[pk]=idBy[pk]||{dias:new Set(),aderSum:0,aderN:0}); g.dias.add(r.data); if(r.aderencia!=null){g.aderSum+=r.aderencia;g.aderN++;} }); });
+  const temRecs=RECORDS.length>0;
+  const rk={critico:0,atencao:1,pendente:2,conforme:3};
+  const rows=Object.keys(SAUDE).map(pk=>{ const s=SAUDE[pk]; const f=camFarol(s.func,s.status); const id=idBy[pk];
+    const dias=id?id.dias.size:0; const ader=id&&id.aderN?Math.round(id.aderSum/id.aderN):null;
+    const idStatus = !temRecs ? '— (sem movimentação carregada)' : (dias>0? ('identificando · '+dias+' dia'+(dias>1?'s':'')) : 'sem identificação no período');
+    const idCls = !temRecs ? 'pend' : (dias>0?'ok':'bad');
+    let acao, acaoCls;
+    if(f.cls==='bad'){ acao='Manutenção (câmera)'; acaoCls='critico'; }
+    else if(f.cls==='warn'){ acao='Em manutenção/agendada'; acaoCls='atencao'; }
+    else if(f.cls==='pend'){ acao='Sem câmera'; acaoCls='pendente'; }
+    else if(f.cls==='ok' && temRecs && dias===0){ acao='Verificar — OK mas sem identificar'; acaoCls='critico'; }
+    else { acao='OK'; acaoCls='conforme'; }
+    return {placa:pk, op:s.op, func:s.func, farol:f, dias, ader, idStatus, idCls, acao, acaoCls};
+  }).sort((a,b)=> (rk[a.acaoCls]-rk[b.acaoCls]) || a.placa.localeCompare(b.placa));
+  SAUDE_ROWS=rows;
+  const total=rows.length, ok=rows.filter(r=>r.farol.cls==='ok').length, prob=rows.filter(r=>r.farol.cls==='bad').length,
+        semId=rows.filter(r=>r.farol.cls==='ok'&&temRecs&&r.dias===0).length, acionar=rows.filter(r=>r.acaoCls==='critico').length;
+  const K=[
+    {lab:'Cavalos c/ câmera',val:total,sub:'na base de saúde',ac:'var(--s2)'},
+    {lab:'Câmera OK',val:ok,sub:'funcionalidade OK',ac:'var(--good)'},
+    {lab:'Câmera com problema',val:prob,sub:'manipulada/obstruída/sem sinal',ac:'var(--critical)'},
+    {lab:'OK mas sem identificar',val:semId,sub:temRecs?'investigar no período':'plugar movimentação',ac:'var(--warning)'},
+    {lab:'Acionar manutenção',val:acionar,sub:'prioridade',ac:'var(--serious)'},
+  ];
+  kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
+  const chip={critico:'<span class="chip critico">Acionar</span>',atencao:'<span class="chip atencao">Em manut.</span>',pendente:'<span class="chip pendente">Sem câmera</span>',conforme:'<span class="chip conforme">OK</span>'};
+  const cor=c=>c==='ok'?'var(--good-ink)':c==='bad'?'var(--crit-ink)':c==='warn'?'var(--serious)':'var(--muted)';
+  box.innerHTML='<div class="tblwrap"><table style="min-width:820px"><thead><tr><th>Cavalo</th><th>OP</th><th>Funcionalidade</th><th>Identificação (dados)</th><th>Aderência</th><th>Ação</th></tr></thead><tbody>'+
+    rows.map(r=>`<tr><td class="tnum">${r.placa}</td><td>${r.op||'—'}</td>
+      <td><span style="color:${cor(r.farol.cls)}">${r.func||'—'}</span></td>
+      <td style="color:${r.idCls==='ok'?'var(--good-ink)':r.idCls==='bad'?'var(--crit-ink)':'var(--muted)'}">${r.idStatus}</td>
+      <td class="tnum">${r.ader==null?'—':r.ader+'%'}</td>
+      <td>${chip[r.acaoCls]||''}</td></tr>`).join('')+
+    '</tbody></table></div>';
+}
+function exportSaude(){
+  if(!SAUDE_ROWS.length){ toast('Nada para exportar'); return; }
+  const head=['Cavalo','OP','Funcionalidade','Identificacao','Dias_identificado','Aderencia_pct','Acao'];
+  const lines=[head.join(';')];
+  SAUDE_ROWS.forEach(r=>lines.push([r.placa,r.op,'"'+r.func+'"','"'+r.idStatus+'"',r.dias,(r.ader==null?'':r.ader),'"'+r.acao+'"'].join(';')));
+  baixarCsv(lines,'saude_cameras.csv');
 }
 function renderBatimento(){
   const kbox=$('#opKpis'), box=$('#opBox'); const rows=batimentoRows();
@@ -1695,7 +1782,7 @@ function aggBoletim(text){
   const first=text.slice(0,nl).replace(/\r$/,'');
   const delim=(first.match(/;/g)||[]).length>=(first.match(/,/g)||[]).length?';':',';
   const head=splitCSVLine(first,delim); const H={}; head.forEach((h,i)=>H[norm(h)]=i);
-  const iMot=H['MOTORISTA'], iDep=H['DEPARTAMENTO'], iKm=H['DISTANCIA PERCORRIDA'], iLit=H['CONSUMO DE COMBUSTIVEL'];
+  const iMot=H['MOTORISTA'], iCpf=(H['CPF']!=null?H['CPF']:H['CPF MOTORISTA']), iDep=H['DEPARTAMENTO'], iKm=H['DISTANCIA PERCORRIDA'], iLit=H['CONSUMO DE COMBUSTIVEL'];
   const cols=BOL_TIPOS.map(t=>Object.assign({},t,{idx:(H[t.c]!=null?H[t.c]:-1)}));
   const A={}; let n=0, start=nl+1;
   while(start<text.length){
@@ -1704,7 +1791,8 @@ function aggBoletim(text){
     if(!line) continue;
     const c=splitCSVLine(line,delim); if(iMot==null||c.length<=iMot) continue;
     const nome=(c[iMot]||'').trim(); if(!nome) continue; const nn=norm(nome);
-    const a=(A[nn]=A[nn]||{nome, total:0, tipos:{}, dias:0, km:0, litros:0, dep:''});
+    const a=(A[nn]=A[nn]||{nome, total:0, tipos:{}, dias:0, km:0, litros:0, dep:'', cpf:''});
+    if(!a.cpf && iCpf!=null){ const cf=cpfKey(c[iCpf]); if(cf) a.cpf=cf; }
     a.dias++;
     if(iKm!=null) a.km+=numBR(c[iKm]); if(iLit!=null) a.litros+=numBR(c[iLit]);
     if(iDep!=null){ const d=(c[iDep]||'').trim(); if(d && norm(d)!=='SEM DEPARTAMENTO' && !a.dep) a.dep=d; }
@@ -1719,7 +1807,7 @@ function aggBoletim(text){
 function loadBoletim(file){
   const ext=(file.name.split('.').pop()||'').toLowerCase();
   const done=(text)=>{ try{
-      const r=aggBoletim(text); BOL=r.A; BOL_N=r.n;
+      const r=aggBoletim(text); BOL=r.A; BOL_N=r.n; rebuildDePara();
       build(); fillFilters(); updateDropStatus(); renderAll();
       toast('Boletim ✓ '+r.n.toLocaleString('pt-BR')+' registros · '+Object.keys(r.A).length+' motoristas · alertas por tipo');
     }catch(err){ toast('Erro ao processar o Boletim'); } };
@@ -1729,6 +1817,64 @@ function loadBoletim(file){
     rd.onload=e=>{ JSZip.loadAsync(e.target.result).then(zip=>{ const name=Object.keys(zip.files).find(f=>/\.csv$/i.test(f)); if(!name){ toast('Zip sem CSV'); return; } return zip.files[name].async('arraybuffer').then(ab=>done(decodeText(ab))); }).catch(()=>toast('Erro ao abrir o zip')); };
     rd.readAsArrayBuffer(file);
   } else { rd.onload=e=>done(decodeText(e.target.result)); rd.readAsArrayBuffer(file); }
+}
+
+// de-para CPF ↔ nome (a partir do Boletim, que tem os dois)
+function rebuildDePara(){ const c2n={}, n2c={}; if(BOL){ for(const nn in BOL){ const b=BOL[nn]; if(b.cpf){ if(!c2n[b.cpf])c2n[b.cpf]=b.nome; n2c[nn]=b.cpf; } } } CPF2NOME=Object.keys(c2n).length?c2n:null; NOME2CPF=Object.keys(n2c).length?n2c:null; }
+
+/* ===== SAÚDE DAS CÂMERAS (equipamentos) ===== */
+function camFarol(func, status){
+  const s=norm(status), f=norm(func);
+  if(s.indexOf('SEM CAMERA')>=0) return {cls:'pend',lab:'sem câmera'};
+  if(!f) return {cls:'pend',lab:'—'};
+  if(f.indexOf('OK')>=0) return {cls:'ok',lab:'OK'};
+  if(f.indexOf('MANUTENC')>=0||f.indexOf('AGEND')>=0) return {cls:'warn',lab:func};
+  return {cls:'bad',lab:func};   // manipulada / obstruída / sem sinal / sem vídeo
+}
+function loadSaude(file){
+  loadXlsxSheet(file, ['BASE'], ['cavalo','funcional'], rows=>{
+    if(!rows||!rows.length){ toast('Saúde: vazio'); return; }
+    const r0=rows[0]; const cP=col(r0,['cavalo','placa','veiculo']), cO=col(r0,['op','opera']), cS=col(r0,['status']), cF=col(r0,['funcional','camera']);
+    if(!cP){ toast('Saúde: não achei a placa (CAVALO)'); return; }
+    const map={};
+    rows.forEach(row=>{ const pl=placaKey(row[cP]); if(!pl) return; map[pl]={ op:cO?String(row[cO]).trim():'', status:cS?String(row[cS]).trim():'', func:cF?String(row[cF]).trim():'' }; });
+    SAUDE=map; SAUDE_N=Object.keys(map).length; updateDropStatus(); renderAll();
+    toast('Saúde ✓ '+SAUDE_N+' cavalos com câmera');
+  });
+}
+
+/* ===== PEDIDOS (viagens): placa|dia → operação (centro de resultado) + CPF do condutor planejado ===== */
+function aggPedidos(text){
+  text=text.replace(/^﻿/,''); const nl=text.indexOf('\n'); if(nl<0) return {op:{},drv:{},n:0};
+  const first=text.slice(0,nl).replace(/\r$/,'');
+  const delim=(first.match(/;/g)||[]).length>=(first.match(/,/g)||[]).length?';':',';
+  const head=splitCSVLine(first,delim); const H={}; head.forEach((h,i)=>H[norm(h)]=i);
+  const find=(...ns)=>{ for(const nm of ns){ for(const k in H){ if(k.indexOf(nm)>=0) return H[k]; } } return -1; };
+  const iVei=find('VEICULO'), iCpf=find('CPF'), iCen=find('CENTRO RESULTADO','CENTRO'), iData=find('DATA CARREGAMENTO','CARREGAMENTO','DATA DE CADASTRO');
+  const op={}, drv={}; let n=0, start=nl+1;
+  while(start<text.length){
+    let end=text.indexOf('\n',start); if(end<0) end=text.length;
+    const line=text.slice(start, text.charCodeAt(end-1)===13?end-1:end); start=end+1;
+    if(!line) continue;
+    const c=splitCSVLine(line,delim); if(iVei<0 || c.length<=iVei) continue;
+    const data=iData>=0? isoDate(splitDT(c[iData]).date||c[iData]) : ''; if(!data) continue;
+    const centro=iCen>=0?(c[iCen]||'').trim():''; const cpf=iCpf>=0?cpfKey(c[iCpf]):'';
+    (c[iVei]||'').split(/[,;/]/).forEach(p=>{ const pk=placaKey(p); if(!pk) return; const k=pk+'|'+data;
+      if(centro && !op[k]) op[k]=centro; if(cpf && !drv[k]) drv[k]=cpf; });
+    n++;
+  }
+  return {op,drv,n};
+}
+function loadPedidos(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  const done=(text)=>{ try{
+    const r=aggPedidos(text); PED_OP=r.op; PED_DRV=r.drv; PED_N=r.n;
+    build(); fillFilters(); updateDropStatus(); renderAll();
+    toast('Pedidos ✓ '+r.n.toLocaleString('pt-BR')+' viagens · '+Object.keys(r.op).length.toLocaleString('pt-BR')+' placa-dia');
+  }catch(err){ toast('Erro ao processar Pedidos'); } };
+  const rd=new FileReader();
+  if(ext==='zip'){ if(typeof JSZip==='undefined'){toast('Sem internet p/ zip');return;} rd.onload=e=>{ JSZip.loadAsync(e.target.result).then(zip=>{ const name=Object.keys(zip.files).find(f=>/\.csv$/i.test(f)); if(!name){toast('Zip sem CSV');return;} return zip.files[name].async('arraybuffer').then(ab=>done(decodeText(ab))); }).catch(()=>toast('Erro no zip')); }; rd.readAsArrayBuffer(file); }
+  else { rd.onload=e=>done(decodeText(e.target.result)); rd.readAsArrayBuffer(file); }
 }
 
 let TMS_N=0, ABAST_N=0, META_N=0;
@@ -1830,7 +1976,7 @@ function batimentoRows(){
 }
 
 function updateDropStatus(){
-  const opc=['#drop-alertas','#drop-tms','#drop-abast','#drop-metas','#drop-boletim'];
+  const opc=['#drop-alertas','#drop-tms','#drop-abast','#drop-metas','#drop-boletim','#drop-pedidos','#drop-saude'];
   const set=(id,n,dropId,unit,zero)=>{ $(id).textContent = n? (n.toLocaleString('pt-BR')+' '+(unit||'linhas')+' ✓') : (zero||(opc.includes(dropId)?'nenhum arquivo':'nenhum arquivo — usando demonstração')); $(dropId).classList.toggle('loaded',!!n); };
   set('#stPonto', (pending.ponto&&pending.ponto.length)||(RAW&&RAW.counts&&RAW.counts.ponto)||0, '#drop-ponto');
   set('#stMov',   (pending.mov&&pending.mov.length)  ||(RAW&&RAW.counts&&RAW.counts.mov)  ||0, '#drop-mov');
@@ -1839,6 +1985,8 @@ function updateDropStatus(){
   set('#stAbast', ABAST_N, '#drop-abast', 'motoristas');
   set('#stMetas', META_N, '#drop-metas', 'metas por placa', 'nenhum arquivo · meta única '+CFG.meta.toFixed(2).replace('.',','));
   set('#stBoletim', BOL_N, '#drop-boletim', 'registros');
+  set('#stPedidos', PED_N, '#drop-pedidos', 'viagens');
+  set('#stSaude', SAUDE_N, '#drop-saude', 'cavalos');
 }
 
 /* ============================================================
@@ -1899,6 +2047,7 @@ $('#expCsv').onclick=exportCsv;
 $('#expSemana').onclick=exportSemana;
 $('#expOper').onclick=exportOperacao;
 $('#expMedia').onclick=exportMedia;
+$('#expSaude').onclick=exportSaude;
 // config
 function bindCfg(id,key){ const el=$(id); el.value=CFG[key]; el.addEventListener('input',()=>{ CFG[key]=parseFloat(el.value)||0; saveCfg(); build(); fillFilters(); renderAll(); }); }
 bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgPreco','precoLitro'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH'); bindCfg('#cfgJornadaMin','jornadaMin');
@@ -1915,9 +2064,11 @@ $('#fileTms').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo
 $('#fileAbast').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo abastecimento (arquivo grande, aguarde)…'); setTimeout(()=>loadAbastecimento(e.target.files[0]),30); } });
 $('#fileMetas').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo metas…'); loadMetas(e.target.files[0]); } });
 $('#fileBoletim').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando Boletim (arquivo grande, aguarde)…'); setTimeout(()=>loadBoletim(e.target.files[0]),30); } });
+$('#filePedidos').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Processando Pedidos (arquivo grande, aguarde)…'); setTimeout(()=>loadPedidos(e.target.files[0]),30); } });
+$('#fileSaude').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo saúde das câmeras…'); loadSaude(e.target.files[0]); } });
 $('#recalc').onclick=()=>{ ingest(); };
-$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
-$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
+$('#resetDemo').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Voltou à demonstração'); };
+$('#clearData').onclick=()=>{ pending={ponto:null,mov:null}; RAW=null; REAL=false; ALERTS=null; ALERTS_N=0; AL_TL=null; PLACA_UO=null; TMS=null; TMS_N=0; ABAST=null; ABAST_N=0; META_FAM=null; META_PLACA=null; META_N=0; BOL=null; BOL_N=0; SAUDE=null; SAUDE_N=0; PED_OP=null; PED_DRV=null; PED_N=0; CPF2NOME=null; NOME2CPF=null; try{localStorage.removeItem(LS.data);}catch(e){} build(); fillFilters(); renderAll(); updateDropStatus(); toast('Bases removidas'); };
 
 // INIT
 if(RAW&&RAW.alertas){ ALERTS=RAW.alertas; ALERTS_N=(RAW.counts&&RAW.counts.alertas)||0; PLACA_UO=RAW.placaUO||null; }
