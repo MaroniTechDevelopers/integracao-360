@@ -1059,7 +1059,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       (r.almocoDrivenSegs||[]).forEach(s=>almoco.push({a:off+s.ini,b:off+s.fim}));
       alertsForRec(r).forEach(al=>{ alertas.push({t:off+al.t,niv:al.niv,tipo:al.tipo}); if(al.niv==='A')nAlto++; });
       dd+=r.horasDedoDuro||0; hpon+=r.horasPonto||0; hcond+=r.horasMov||0; hex+=r.horaExtra||0;
-      if(r.semelhanca!=null){ semSum+=r.semelhanca; semN++; }
+      const idv=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(idv!=null){ semSum+=idv; semN++; }
     });
     const identPct = semN? Math.round(semSum/semN) : null;
     ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, t0:0, t1:g.total, total:g.total};
@@ -1216,7 +1216,7 @@ function renderFicha(){
   const ddTotal=recs.reduce((a,r)=>a+r.horasDedoDuro,0);
   const hexTotal=recs.reduce((a,r)=>a+(r.horaExtra||0),0);
   const diasHex=recs.filter(r=>r.horaExtra>0).length;
-  const semArr=recs.map(r=>r.semelhanca).filter(v=>v!=null);
+  const semArr=recs.map(r=>r.aderencia!=null?r.aderencia:r.semelhanca).filter(v=>v!=null);
   const semel=semArr.length?Math.round(semArr.reduce((a,b)=>a+b,0)/semArr.length):null;
   const op=[...new Set(recs.map(r=>r.operacao))].join(', ');
   const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
@@ -1539,6 +1539,9 @@ let pending={ponto:null,mov:null};
 function numBR(v){ v=String(v==null?'':v).trim(); if(v.indexOf(',')>=0) return parseFloat(v.replace(/\./g,'').replace(',','.'))||0; return parseFloat(v)||0; }
 
 let MOV_N=0;
+// ADERÊNCIA DE IDENTIFICAÇÃO — por placa+dia: minutos de movimento total × com condutor identificado (só em memória)
+let MOV_TOT={}, MOV_IDN={};
+function aderDe(placas, data){ let tot=0,idn=0; (placas||[]).forEach(p=>{ const pk=placaKey(p)+'|'+data; tot+=MOV_TOT[pk]||0; idn+=MOV_IDN[pk]||0; }); return tot>0? Math.round(idn/tot*100) : null; }
 // JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia)
 function parseJornada(P){
   const ponto={}, roster=new Set(), opBy={};
@@ -1566,8 +1569,7 @@ function accMov(rows, movRaw, roster){
   (rows||[]).forEach(row=>{
     const cOcc=col(row,['ocorrencia','status','evento','situacao']);
     if(cOcc && !norm(row[cOcc]).includes('MOVIMENTO')) return;
-    const cM=col(row,['motorista','condutor']); const nome=cM?String(row[cM]).trim():''; if(!nome) return;
-    const nn=norm(nome); if(!roster.has(nn)) return;                          // escopo: motoristas da jornada
+    const cM=col(row,['motorista','condutor']); const nome=cM?String(row[cM]).trim():'';
     const cIni=col(row,['data/hora inicial','inicial','datahora_inicial','inicio','ini']);
     const cFim=col(row,['data/hora final','final','datahora_final','fim']);
     const cP=col(row,['veiculo','placa','patante']); const cKm=col(row,['distancia','km','percorrida']);
@@ -1576,6 +1578,10 @@ function accMov(rows, movRaw, roster){
     const data=di.date||(cD?isoDate(splitDT(row[cD]).date||row[cD]):''); const ini=toMin(di.time), fim=toMin(df.time);
     if(!data||ini==null||fim==null||fim<ini) return;
     const placa=cP?String(row[cP]).toUpperCase().replace(/\s|-/g,''):'';
+    // ADERÊNCIA: todo movimento do veículo conta (identificado + não identificado)
+    if(placa){ const pk=placa+'|'+data, dur=fim-ini; MOV_TOT[pk]=(MOV_TOT[pk]||0)+dur; if(nome) MOV_IDN[pk]=(MOV_IDN[pk]||0)+dur; }
+    if(!nome) return;                                                          // sem condutor identificado → não vira registro
+    const nn=norm(nome); if(!roster.has(nn)) return;                          // escopo dos registros: motoristas da jornada
     const k=nn+'|'+data; const g=(movRaw[k]=movRaw[k]||{nome,data,segs:[]});
     g.segs.push({ini,fim,km:cKm?numBR(row[cKm]):0,litros:cCons?numBR(row[cCons]):0,placa}); n++;
   });
@@ -1600,7 +1606,7 @@ function finalizeRecords(jor, movRaw, movRows, pontoRows){
     const movimento=(mm?mm.merged:[]).map(s=>({ini:hm(s.ini),fim:hm(s.fim),km:s.km,litros:s.litros||0,placa:s.placas[0]||''}));
     const placas=[...new Set((mm?mm.merged:[]).flatMap(s=>s.placas))];
     records.push({ operacao:(opBy[nn]||''), data, placa:placas[0]||'', placas, motoristaEscala:nome,
-      ponto: pp?pp.punches.slice():[], movimento, trimble:{segs:[]} });
+      ponto: pp?pp.punches.slice():[], movimento, trimble:{segs:[]}, aderencia: aderDe(placas, data) });
   });
   if(!records.length){ toast('Não consegui cruzar — confira as colunas na aba Dados'); return; }
   MOV_N=movRows;
@@ -1612,6 +1618,7 @@ function finalizeRecords(jor, movRaw, movRows, pontoRows){
 function ingest(){
   const P=pending.ponto||[], M=pending.mov||[];
   if(!P.length && !M.length){ toast('Carregue a jornada (ponto) e a movimentação'); return; }
+  MOV_TOT={}; MOV_IDN={};
   const jor=parseJornada(P); const movRaw={}; const n=accMov(M, movRaw, jor.roster);
   finalizeRecords(jor, movRaw, M.length, P.length);
   toast('Cruzado ✓ '+RECORDS.length+' motorista-dias · '+jor.roster.size+' motoristas');
@@ -1620,6 +1627,7 @@ function ingest(){
 function ingestMovZip(file){
   if(!(pending.ponto&&pending.ponto.length)){ toast('Carregue primeiro a jornada (ponto)'); return; }
   if(typeof JSZip==='undefined'){ toast('Sem internet p/ abrir .zip'); return; }
+  MOV_TOT={}; MOV_IDN={};
   const jor=parseJornada(pending.ponto); const movRaw={}; let movRows=0, files=0;
   const rd=new FileReader();
   rd.onload=e=>{ JSZip.loadAsync(e.target.result).then(zip=>{
