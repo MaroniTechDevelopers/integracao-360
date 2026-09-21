@@ -755,8 +755,9 @@ function metaDe(operacao){ if(META_FAM){ const f=opFamily(operacao); if(f && MET
 function metaVeic(placa, operacao){ if(META_PLACA && placa){ const m=META_PLACA[placaKey(placa)]; if(m!=null) return m; } return metaDe(operacao); }
 // operação de um veículo pela placa — usada quando a jornada não traz o departamento
 function operacaoDaPlaca(placa){ if(!placa) return '';
-  if(typeof PLACA_UO!=='undefined' && PLACA_UO){ const u=PLACA_UO[placaKey(placa)]; if(u&&u.uoCurta) return u.uoCurta; }
+  // prioridade: centro de resultado do TMS (por placa) > UO da Trimble (alertas)
   if(typeof TMS!=='undefined' && TMS){ const t=TMS[placaKey(placa)]; if(t&&t.fam && t.fam!=='(não-operacional)') return t.fam; }
+  if(typeof PLACA_UO!=='undefined' && PLACA_UO){ const u=PLACA_UO[placaKey(placa)]; if(u&&u.uoCurta) return u.uoCurta; }
   return ''; }
 
 function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00,jornadaMin:440}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
@@ -770,7 +771,9 @@ function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }c
 function analyze(rec){
   const tol=CFG.tol, movMin=CFG.movMin;
   // operação: da jornada; se vazia, deduz pela placa (alertas/TMS) — recalcula quando essas bases chegam
-  const operacao = (rec.operacao && rec.operacao!=='—') ? rec.operacao : (operacaoDaPlaca(rec.placa||(rec.placas&&rec.placas[0]))||'—');
+  // operação do motorista: PRIORIDADE = centro de resultado do TMS pela placa dirigida > departamento da jornada
+  const opPlaca = operacaoDaPlaca(rec.placa||(rec.placas&&rec.placas[0]));
+  const operacao = opPlaca || ((rec.operacao && rec.operacao!=='—') ? rec.operacao : '—');
   // --- ponto: intervalos trabalhados = pares consecutivos ---
   const punches=(rec.ponto||[]).map(toMin).filter(v=>v!=null).sort((a,b)=>a-b);
   let entrada=punches.length?punches[0]:null, saida=punches.length?punches[punches.length-1]:null;
@@ -1624,7 +1627,7 @@ function loadAlertas(file){
   const done=(text)=>{ try{
       const r=aggAlertas(text, namesOfInterest()); ALERTS=r.A; ALERTS_N=r.n; PLACA_UO=r.placaUO||{}; AL_TL=r.tl||{};
       if(REAL && RAW){ RAW.alertas=ALERTS; RAW.placaUO=PLACA_UO; RAW.counts=RAW.counts||{}; RAW.counts.alertas=r.n; saveData(); }
-      updateDropStatus(); renderAll();
+      build(); fillFilters(); updateDropStatus(); renderAll();   // re-analisa (UO dos alertas pode resolver operação)
       const nTl=Object.values(AL_TL).reduce((a,x)=>a+x.length,0);
       toast('Alertas ✓ '+r.n.toLocaleString('pt-BR')+' eventos · '+Object.keys(r.A).length+' motoristas · '+nTl.toLocaleString('pt-BR')+' na linha do tempo');
     }catch(err){ toast('Erro ao processar alertas'); } };
@@ -1716,8 +1719,9 @@ function ingestTMS(rows){
       rodado:cT?String(row[cT]).trim():'', prop:cPr?String(row[cPr]).trim():'', uf:cUF?String(row[cUF]).trim():'', carroceria:cCar?String(row[cCar]).trim():'' };
   });
   TMS=map; TMS_N=Object.keys(map).length;
-  updateDropStatus(); renderAll();
-  toast('TMS ✓ '+TMS_N.toLocaleString('pt-BR')+' veículos');
+  build(); fillFilters(); updateDropStatus(); renderAll();   // re-analisa p/ resolver a operação pela placa→TMS
+  const semOp=RECORDS.filter(r=>r.operacao==='—').length;
+  toast('TMS ✓ '+TMS_N.toLocaleString('pt-BR')+' veículos · operação resolvida'+(semOp?(' · '+semOp+' dia(s) sem match'):''));
 }
 // BATIMENTO de operação: placa → UO Trimble (alertas) × centro de resultado (TMS)
 function batimentoRows(){
