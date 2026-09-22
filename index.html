@@ -277,6 +277,17 @@
   .plchip.hot:hover{background:color-mix(in srgb,var(--critical) 20%,transparent)}
   .plchip.hot .go{margin-left:auto;color:var(--crit-ink)}
   .plchip.okz{background:var(--surface-2);color:var(--good-ink)}
+  .planobox{padding:14px 16px}
+  .planobox .pb-h{font-weight:700;font-size:13.5px;margin-bottom:10px}
+  .pb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media(max-width:720px){.pb-grid{grid-template-columns:1fr}}
+  .pb-cell{border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;line-height:1.3}
+  .pb-cell b{display:inline-block;font-size:18px;margin-right:6px;font-variant-numeric:tabular-nums}
+  .pb-cell small{display:block;font-weight:400;font-size:11px;color:var(--ink-2);margin-top:4px}
+  .pb-cell.equip{background:color-mix(in srgb,var(--critical) 10%,transparent);border:1px solid color-mix(in srgb,var(--critical) 30%,transparent)}
+  .pb-cell.sist{background:color-mix(in srgb,var(--warning) 12%,transparent);border:1px solid color-mix(in srgb,var(--warning) 32%,transparent)}
+  .pb-cell.verif{background:var(--surface-2);border:1px solid var(--border)}
+  .planotag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
 
   /* ============ FICHA DO MOTORISTA (detalhamento) ============ */
   .ficha-back{display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px}
@@ -292,6 +303,10 @@
   .pontos-col.crit{border-left:3px solid var(--critical)} .pontos-col.crit .pt-h{color:var(--crit-ink)}
   .pontos-col.pos{border-left:3px solid var(--good)} .pontos-col.pos .pt-h{color:var(--good-ink)}
   .pontos-col ul{margin:0;padding-left:18px;font-size:13px;line-height:1.55} .pontos-col li{margin:4px 0}
+  .planolist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .planolist li{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.45;padding:8px 10px;background:var(--surface-2);border-radius:9px;border-left:3px solid var(--gold)}
+  .planolist .pa-ic{font-size:16px;flex:none;line-height:1.3}
+  .planolist b{color:var(--ink)}
   .ficha-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
   .ficha-hero .avatar{width:60px;height:60px;border-radius:14px;font-size:20px}
   .ficha-hero h2{font-size:20px}
@@ -1503,6 +1518,20 @@ function fichaPontos(M){
   if(!pos.length) pos.push('Sem destaques positivos relevantes no período.');
   return {crit,pos};
 }
+// PLANO DE AÇÃO do motorista — passos concretos a partir dos sinais (não só "observar")
+function planoDeAcao(M){
+  const acoes=[], nf=v=>v==null?'—':v.toFixed(2).replace('.',',');
+  if(M.semel!=null && M.semel<CFG.sem) acoes.push({ic:'📷',t:'Câmera / cadastro facial',d:`Aderência ${M.semel}% — revisar cadastro/foto do condutor, vigência e posição da lente${M.placas?' (placa '+M.placas+')':''}; validar leitura com a Trimble.`});
+  if(M.condDiv>0) acoes.push({ic:'🪪',t:'Corrigir vínculo condutor × placa',d:`Câmera reconheceu outro condutor em ${M.condDiv} dia(s) — acertar a escala/atribuição da viagem no TMS.`});
+  if(M.ddRealTotal>=120) acoes.push({ic:'🕵️',t:'Apurar uso fora da jornada',d:`${hDec(M.ddRealTotal)} de movimento fora do ponto — apurar com o motorista e registrar justificativa/autorização.`});
+  else if(M.ddRealTotal>0) acoes.push({ic:'🕵️',t:'Checar dedo duro',d:`${hDec(M.ddRealTotal)} fora do ponto — confirmar se foi manobra/pátio ou uso indevido.`});
+  const alto=(M.alR.niveis&&M.alR.niveis.ALTO)||0;
+  if(alto>0) acoes.push({ic:'🎓',t:'Feedback / treinamento',d:`${alto} alerta(s) de nível ALTO no período — dar feedback ao condutor e acompanhar na próxima semana.`});
+  if(M.mediaR!=null && !M.medaOk) acoes.push({ic:'⛽',t:'Plano de consumo',d:`Média ${nf(M.mediaR)} < meta ${nf(M.metaFicha)} — orientar direção econômica e comparar na próxima medição.`});
+  if(M.hexTotal>0) acoes.push({ic:'⏱️',t:'Ajustar escala',d:`${hDec(M.hexTotal)} de hora extra em ${M.diasHex} dia(s) — validar/adequar a jornada com a operação.`});
+  if(!acoes.length) acoes.push({ic:'✅',t:'Manter monitoramento',d:'Sem ação corretiva necessária no período — seguir acompanhando os indicadores.'});
+  return acoes;
+}
 function renderFicha(){
   const nome=fichaAtual; if(!nome){ $('#fichaBox').innerHTML=''; return; }
   const M=fichaMetrics(nome);
@@ -1513,6 +1542,7 @@ function renderFicha(){
   const wk=buildWeekCards(_recsEvid,'fztl',12,false,_dayF?'dia':'week');   // evidência (dia único se filtrado; senão semanal) com zoom
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
   const P=fichaPontos(M);   // pontos críticos × positivos (mesma fonte do PDF)
+  const PL=planoDeAcao(M);  // plano de ação concreto (o que fazer)
 
   // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
   const tiposArr = alR.real ? Object.entries(alR.tipos||{}).sort((a,b)=>b[1]-a[1]) : [];
@@ -1541,6 +1571,9 @@ function renderFicha(){
       <div class="card pontos-col crit"><div class="pt-h">⚠️ Pontos críticos</div><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
       <div class="card pontos-col pos"><div class="pt-h">✅ Pontos positivos</div><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
     </div>
+
+    <div class="sec-title"><h2>Plano de ação</h2><span>o que fazer com base nos sinais do período</span></div>
+    <div class="card"><ul class="planolist">${PL.map(a=>`<li><span class="pa-ic">${a.ic}</span><div><b>${a.t}</b> — ${a.d}</div></li>`).join('')}</ul></div>
 
     <div class="grid kpis" style="margin-bottom:6px">
       <div class="card kpi"><div class="accent" style="background:${medaOk?'var(--good)':'var(--critical)'}"></div>
@@ -1605,6 +1638,9 @@ function pdfShell(titulo, sub, badge, corpo){
   .col ul{margin:0;padding-left:18px} .col li{margin:5px 0;font-size:12px;line-height:1.45}
   .reco{border:1px solid #e5e7eb;border-left:4px solid #f5c800;border-radius:10px;padding:12px 14px;margin-top:14px;background:#fffdf3;font-size:12.5px}
   .reco b{display:block;margin-bottom:3px}
+  ul.plan{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+  ul.plan li{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.4;padding:8px 10px;background:#f8fafc;border-radius:8px;border-left:3px solid #f5c800}
+  ul.plan li span{font-size:15px;flex:none}
   table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid #eef2f7}
   th{background:#f8fafc;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:#475569}
@@ -1648,9 +1684,11 @@ function exportFichaPDF(){
     <div class="col crit"><h3>⚠️ Pontos críticos</h3><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
     <div class="col pos"><h3>✅ Pontos positivos</h3><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
   </div>`;
-  const reco=`<div class="reco"><b>Recomendação: ${pdfEsc(M.reco.tit)}</b>${pdfEsc(M.reco.txt)}</div>`;
+  const PL=planoDeAcao(M);
+  const plano=`<ul class="plan">${PL.map(a=>`<li><span>${a.ic}</span><div><b>${pdfEsc(a.t)}</b> — ${pdfEsc(a.d)}</div></li>`).join('')}</ul>`;
+  const reco=`<div class="reco"><b>Leitura geral: ${pdfEsc(M.reco.tit)}</b>${pdfEsc(M.reco.txt)}</div>`;
   const sub=`${M.op||'—'}${M.placas?' · '+M.placas:''} · ${M.tempo} de casa · ${periodoLabel()}`;
-  const corpo=kpis+'<h2 class="sec">Pontos críticos × positivos</h2>'+pontos+reco;
+  const corpo=kpis+'<h2 class="sec">Pontos críticos × positivos</h2>'+pontos+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco;
   pdfOpen(pdfShell('Dedo Duro — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
 }
 function exportPainelPDF(){
@@ -1856,46 +1894,47 @@ function identCoverageWarning(){
   return '<div class="card" style="grid-column:1/-1;margin-bottom:12px;padding:11px 14px;font-size:12.5px;border-color:color-mix(in srgb,var(--warning) 50%,var(--border))">'+
     '<b style="color:var(--serious)">⚠ Verificar o export:</b> a movimentação carregada <b>não traz trechos de movimento SEM identificação</b> — a aderência tende a aparecer ~100% (superestimada). Para medir de verdade, peça o relatório de movimentação <b>com as linhas de Movimento mesmo sem motorista</b>'+(bolSemMot?' · alternativa: usar o <b>“Sem Motorista”</b> do Boletim (já carregado)':'')+'.</div>';
 }
-// placas que PUXAM a aderência de uma operação (mesma regra da aba "Placas sem ID")
-function placasAfetamOp(op){
-  if(!(typeof PLACA_MOV!=='undefined' && PLACA_MOV && Object.keys(PLACA_MOV).length)) return [];
-  const out=[];
-  for(const pk in PLACA_MOV){ const g=PLACA_MOV[pk]; if(!g.tot) continue; if(operacaoDaPlaca(pk)!==op) continue;
-    const ader=Math.round(g.idn/g.tot*100); if(g.idn===0 || ader<CFG.sem) out.push({placa:pk,ader:(g.idn===0?0:ader),dias:g.dias}); }
-  return out.sort((a,b)=>a.ader-b.ader || b.dias-a.dias);
-}
 function renderAderencia(rows){
   const box=$('#aderBox'), kbox=$('#aderKpis'); if(!box) return;
   const ops={};
   rows.forEach(r=>{ const o=r.operacao||'—'; const g=(ops[o]=ops[o]||{op:o,idW:0,idT:0,mot:new Set(),placas:new Set(),dd:0,hex:0});
     const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); g.idW+=v*w; g.idT+=w; }
     g.mot.add(r.motoristaEscala); ((r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[])).forEach(p=>g.placas.add(placaKey(p))); g.dd+=r.horasDedoDuro||0; g.hex+=r.horaExtra||0; });
-  const list=Object.values(ops).map(g=>({op:g.op, ident:g.idT?Math.round(g.idW/g.idT):null, motN:g.mot.size, placN:g.placas.size, dd:g.dd, hex:g.hex, afeta:placasAfetamOp(g.op)}))
+  // opStats = placas POR OPERAÇÃO na MESMA base da aba "Placas sem ID" (PLACA_MOV, atribuída pela UO/placa)
+  // — reconcilia o nº de veículos do card com o detalhamento (OK + p/ ação); carretas/placas sem câmera não entram
+  let opStats=null;
+  if(typeof PLACA_MOV!=='undefined' && PLACA_MOV && Object.keys(PLACA_MOV).length){ opStats={};
+    for(const pk in PLACA_MOV){ const g=PLACA_MOV[pk]; if(!g.tot) continue; const o=operacaoDaPlaca(pk)||'—';
+      const s=(opStats[o]=opStats[o]||{total:0,ok:0,acao:0,zero:0}); s.total++;
+      const ader=g.idn/g.tot*100; if(g.idn===0){ s.acao++; s.zero++; } else if(ader<CFG.sem){ s.acao++; } else s.ok++; } }
+  const list=Object.values(ops).map(g=>({op:g.op, ident:g.idT?Math.round(g.idW/g.idT):null, motN:g.mot.size, placN:g.placas.size, dd:g.dd, hex:g.hex, st:(opStats?opStats[g.op]:null)}))
     .sort((a,b)=> (a.ident==null?9999:a.ident)-(b.ident==null?9999:b.ident) || b.motN-a.motN);
   let W=0,T=0; rows.forEach(r=>{ const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); W+=v*w; T+=w; } });
   const frota=T?Math.round(W/T):null;
   const abaixo=list.filter(g=>g.ident!=null && g.ident<CFG.sem).length;
   const comId=list.filter(g=>g.ident!=null).length;
   // placas puxando a aderência (respeita o filtro de operação) — mesma conta da aba "Placas sem ID"
-  let placAcaoTot=null, placZeroTot=0;
-  if(typeof PLACA_MOV!=='undefined' && PLACA_MOV && Object.keys(PLACA_MOV).length){ const opF=$('#fOp').value; placAcaoTot=0;
-    for(const pk in PLACA_MOV){ const g=PLACA_MOV[pk]; if(!g.tot) continue; if(opF && operacaoDaPlaca(pk)!==opF) continue;
-      const ader=g.idn/g.tot*100; if(g.idn===0){ placAcaoTot++; placZeroTot++; } else if(ader<CFG.sem){ placAcaoTot++; } } }
+  let placAcaoTot=null, placZeroTot=0, placOkTot=0, placTot=0;
+  if(opStats){ const opF=$('#fOp').value;
+    for(const o in opStats){ if(opF && o!==opF) continue; const s=opStats[o]; placAcaoTot=(placAcaoTot||0)+s.acao; placZeroTot+=s.zero; placOkTot+=s.ok; placTot+=s.total; }
+    if(placAcaoTot==null) placAcaoTot=0; }
   const K=[
     {lab:'① Aderência da frota',val:(frota==null?'—':frota+'<small>%</small>'),sub:'movimento identificado ÷ total',ac:(frota==null?'var(--muted)':(frota>=CFG.sem?'var(--good)':'var(--critical)'))},
     {lab:'Operações',val:list.length,sub:comId+' c/ identificação',ac:'var(--s2)'},
     {lab:'Abaixo do mínimo',val:abaixo,sub:'operações < meta '+CFG.sem+'%',ac:abaixo>0?'var(--critical)':'var(--good)'},
   ];
-  if(placAcaoTot!=null) K.push({lab:'Placas puxando ↓',val:placAcaoTot,sub:(placZeroTot?placZeroTot+' sem NENHUMA ID · ':'')+'clique p/ analisar',ac:placAcaoTot?'var(--critical)':'var(--good)',goplacas:true});
+  if(placAcaoTot!=null) K.push({lab:'Placas puxando ↓',val:placAcaoTot,sub:(placZeroTot?placZeroTot+' sem NENHUMA ID · ':'')+'de '+placTot+' c/ movimento · clique',ac:placAcaoTot?'var(--critical)':'var(--good)',goplacas:true});
   if(kbox) kbox.innerHTML=K.map(k=>`<div class="card kpi" ${k.goplacas?'data-goplacas-all="1" title="ver as placas na aba Placas sem ID"':''}><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
   if(!list.length){ box.innerHTML='<div class="empty">Sem dados de identificação no filtro atual. Carregue o relatório de <b>Alertas</b> (UO da Trimble) e a <b>Movimentação</b>.</div>'; return; }
   box.innerHTML=identCoverageWarning()+list.map(g=>{ const cor=g.ident==null?'var(--muted)':(g.ident>=CFG.sem?'var(--good)':(g.ident>=CFG.sem*0.75?'var(--warning)':'var(--critical)'));
-    const nAf=g.afeta.length, zero=g.afeta.filter(p=>p.ader===0).length;
+    const st=g.st, nAf=st?st.acao:0, zero=st?st.zero:0;
+    const vc=st?st.total:g.placN;
+    const subVeic = st ? `${g.motN} motorista(s) · ${vc} veículo(s) c/ movimento · ${st.ok} OK · ${st.acao} p/ ação` : `${g.motN} motorista(s) · ${vc} veículo(s)`;
     const chip = nAf>0
       ? `<span class="plchip hot" data-goplacas="${encodeURIComponent(g.op)}" title="ver essas placas na aba Placas sem ID"><span class="n">${nAf}</span> placa(s) puxando a aderência${zero?' · '+zero+' sem NENHUMA ID':''}<span class="go">analisar →</span></span>`
-      : (placAcaoTot==null ? '' : `<span class="plchip okz">✓ nenhuma placa abaixo do mínimo</span>`);
+      : (opStats==null ? '' : `<span class="plchip okz">✓ nenhuma placa abaixo do mínimo</span>`);
     return `<button class="capinha adercard" data-op="${encodeURIComponent(g.op)}">
-      <div class="cap-id" style="margin-bottom:4px"><b>${g.op}</b><small>${g.motN} motorista(s) · ${g.placN} veículo(s)</small></div>
+      <div class="cap-id" style="margin-bottom:4px"><b>${g.op}</b><small>${subVeic}</small></div>
       <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:32px;font-weight:760;letter-spacing:-.02em;color:${cor}">${g.ident==null?'—':g.ident+'%'}</span><span style="font-size:11px;color:var(--muted)">aderência</span></div>
       <div style="height:8px;background:var(--surface-2);border-radius:5px;overflow:hidden;margin:8px 0 4px"><div style="height:100%;width:${g.ident||0}%;background:${cor}"></div></div>
       <div class="cap-metrics">
@@ -1907,6 +1946,20 @@ function renderAderencia(rows){
     </button>`; }).join('');
 }
 let SEMID_ROWS=[];
+// PLANO DE AÇÃO por placa: cruza saúde da câmera × identificação → o que fazer (equipamento × sistêmico)
+const PLANO_DEF={
+  equip:{ic:'🔧',lab:'Manutenção de equipamento',cor:'var(--critical)',ink:'var(--crit-ink)'},
+  sist :{ic:'🧩',lab:'Ação sistêmica',cor:'var(--warning)',ink:'var(--serious)'},
+  verif:{ic:'❓',lab:'Verificar câmera',cor:'var(--pend)',ink:'var(--pend-ink)'}
+};
+function planoDaPlaca(cam, cls){
+  const c=norm(cam);
+  const problema = c && /(SEM SINAL|OBSTRU|MANIPULAD|SEM VIDEO|DEFEIT|MANUTEN|AVARIA|DANIFICAD|QUEBRAD|DESLIGAD|INOPERANT|SEM CAMERA|SEM IMAGEM)/.test(c);
+  if(problema) return {cat:'equip', txt:'Acionar manutenção/Trimble — câmera "'+cam+'". Sem o equipamento, não há identificação.'};
+  if(!c) return {cat:'verif', txt:'Sem status de câmera no controle de saúde — confirmar se há câmera instalada e incluir a placa no controle; se tiver, tratar como sistêmico.'};
+  if(cls==='critico') return {cat:'sist', txt:'Câmera reportada OK mas 0 identificação → sistêmico: revisar cadastro/foto do motorista, vigência e posição da lente; validar leitura com a Trimble.'};
+  return {cat:'sist', txt:'Identificação intermitente → revisar cadastro dos motoristas frequentes desta placa e limpeza/posição da câmera.'};
+}
 function renderPlacasSemId(){
   const kbox=$('#semidKpis'), box=$('#semidBox');
   if(!PLACA_MOV || !Object.keys(PLACA_MOV).length){ kbox.innerHTML=''; box.innerHTML='<div class="empty">Carregue a <b>Movimentação</b> na aba <b>Dados</b> para listar as placas que se moveram sem identificação do condutor. (precisa que o relatório traga o movimento mesmo sem motorista)</div>'; SEMID_ROWS=[]; return; }
@@ -1920,27 +1973,38 @@ function renderPlacasSemId(){
     if(g.idn===0){ status='NENHUM condutor identificado'; cls='critico'; }
     else if(ader!=null && ader<CFG.sem){ status='Identificação abaixo do mínimo'; cls='atencao'; }
     else { status='OK'; cls='ok'; }
-    return {placa:pk, op, dias:g.dias, diasId:g.diasId, ader, cam, status, cls, ult:g.ult};
+    return {placa:pk, op, dias:g.dias, diasId:g.diasId, ader, cam, status, cls, plano:planoDaPlaca(cam,cls), ult:g.ult};
   }).filter(r=>r.cls!=='ok').sort((a,b)=> (rk[a.cls]-rk[b.cls]) || (a.ader||0)-(b.ader||0) || b.dias-a.dias);
   SEMID_ROWS=rows;
   const totPlacas=Object.keys(PLACA_MOV).filter(pk=> !opF || operacaoDaPlaca(pk)===opF).length, semNenhum=rows.filter(r=>r.cls==='critico').length, baixa=rows.filter(r=>r.cls==='atencao').length;
+  const nEquip=rows.filter(r=>r.plano.cat==='equip').length, nSist=rows.filter(r=>r.plano.cat==='sist').length, nVerif=rows.filter(r=>r.plano.cat==='verif').length;
   const K=[
     {lab:'Placas que se moveram',val:totPlacas.toLocaleString('pt-BR'),sub:(opF?opF:'no período'),ac:'var(--s2)'},
-    {lab:'Sem NENHUMA identificação',val:semNenhum,sub:'câmera não reconheceu ninguém',ac:'var(--critical)'},
-    {lab:'Identificação baixa',val:baixa,sub:'abaixo do mínimo ('+CFG.sem+'%)',ac:'var(--warning)'},
-    {lab:'Para ação',val:rows.length,sub:'total nesta lista',ac:'var(--serious)'},
+    {lab:'🔧 Manutenção equip.',val:nEquip,sub:'câmera c/ falha reportada',ac:'var(--critical)'},
+    {lab:'🧩 Ação sistêmica',val:nSist,sub:'cadastro / foto / posição',ac:'var(--warning)'},
+    {lab:'❓ Verificar câmera',val:nVerif,sub:'sem status no controle',ac:'var(--pend)'},
   ];
   kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
   if(!rows.length){ box.innerHTML='<div class="empty">🎉 '+(opF?'Nenhuma placa da operação <b>'+opF+'</b> ':'Todas as placas que se moveram tiveram condutor identificado dentro do mínimo.')+(opF?'para ação — tudo identificado dentro do mínimo.':'')+'</div>'; return; }
   const chip={critico:'<span class="chip critico">Sem ID</span>',atencao:'<span class="chip atencao">ID baixa</span>'};
-  box.innerHTML=identCoverageWarning()+(opF?'<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)">Filtrado por operação <b>'+opF+'</b> · '+rows.length+' placa(s) p/ ação · clique numa placa para ver a linha do tempo dela</div>':'')+
-    '<div class="tblwrap"><table style="min-width:860px"><thead><tr><th>Placa</th><th>Operação</th><th>Dias moveu</th><th>Dias c/ ID</th><th>Aderência</th><th>Câmera (saúde)</th><th>Últ. mov.</th><th>Situação</th><th></th></tr></thead><tbody>'+
-    rows.map(r=>`<tr class="semidrow" data-placa="${r.placa}" title="ver a linha do tempo desta placa" style="cursor:pointer"><td class="tnum">${r.placa}</td><td>${r.op}</td><td class="tnum">${r.dias}</td><td class="tnum">${r.diasId}</td>
+  // banner de PLANO DE AÇÃO — o que fazer, priorizado
+  const planoBanner = `<div class="card planobox" style="margin-bottom:12px">
+    <div class="pb-h">📋 Plano de ação${opF?' — '+opF:''} · ${rows.length} placa(s)</div>
+    <div class="pb-grid">
+      <div class="pb-cell equip"><b>🔧 ${nEquip}</b> Manutenção de equipamento<small>câmera sem sinal/obstruída/manipulada/em manutenção → abrir chamado p/ manutenção ou Trimble</small></div>
+      <div class="pb-cell sist"><b>🧩 ${nSist}</b> Ação sistêmica<small>câmera OK mas não identifica → cadastro/foto do motorista, vigência e posição da lente</small></div>
+      <div class="pb-cell verif"><b>❓ ${nVerif}</b> Verificar câmera<small>placa sem status no controle de saúde → confirmar se há equipamento instalado</small></div>
+    </div></div>`;
+  box.innerHTML=identCoverageWarning()+planoBanner+(opF?'<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)">Filtrado por operação <b>'+opF+'</b> · clique numa placa para ver a linha do tempo dela</div>':'')+
+    '<div class="tblwrap"><table style="min-width:1000px"><thead><tr><th>Placa</th><th>Operação</th><th>Dias moveu</th><th>Dias c/ ID</th><th>Aderência</th><th>Câmera (saúde)</th><th>Situação</th><th>Plano de ação — o que fazer</th><th></th></tr></thead><tbody>'+
+    rows.map(r=>{ const pl=PLANO_DEF[r.plano.cat]; return `<tr class="semidrow" data-placa="${r.placa}" title="ver a linha do tempo desta placa" style="cursor:pointer"><td class="tnum">${r.placa}</td><td>${r.op}</td><td class="tnum">${r.dias}</td><td class="tnum">${r.diasId}</td>
       <td class="tnum" style="color:${r.ader===0?'var(--crit-ink)':(r.ader<CFG.sem?'var(--serious)':'inherit')}">${r.ader==null?'—':r.ader+'%'}</td>
-      <td>${r.cam||'—'}</td><td class="tnum">${r.ult?brDate(r.ult):'—'}</td><td>${chip[r.cls]||''}</td><td style="color:var(--gold-2)">↗</td></tr>`).join('')+
+      <td>${r.cam||'—'}</td><td>${chip[r.cls]||''}</td>
+      <td style="max-width:360px"><span class="planotag" style="background:color-mix(in srgb,${pl.cor} 15%,transparent);color:${pl.ink};border:1px solid color-mix(in srgb,${pl.cor} 35%,transparent)">${pl.ic} ${pl.lab}</span><div style="font-size:11.5px;color:var(--ink-2);margin-top:3px;white-space:normal">${r.plano.txt}</div></td>
+      <td style="color:var(--gold-2)">↗</td></tr>`; }).join('')+
     '</tbody></table></div>';
 }
-function exportSemId(){ if(!SEMID_ROWS.length){toast('Nada para exportar');return;} const head=['Placa','Operacao','Dias_moveu','Dias_com_ID','Aderencia_pct','Camera_saude','Ultima_mov','Situacao']; const lines=[head.join(';')]; SEMID_ROWS.forEach(r=>lines.push([r.placa,'"'+r.op+'"',r.dias,r.diasId,(r.ader==null?'':r.ader),'"'+(r.cam||'')+'"',r.ult,'"'+r.status+'"'].join(';'))); baixarCsv(lines,'placas_sem_identificacao.csv'); }
+function exportSemId(){ if(!SEMID_ROWS.length){toast('Nada para exportar');return;} const head=['Placa','Operacao','Dias_moveu','Dias_com_ID','Aderencia_pct','Camera_saude','Situacao','Categoria_plano','Plano_de_acao','Ultima_mov']; const lines=[head.join(';')]; SEMID_ROWS.forEach(r=>lines.push([r.placa,'"'+r.op+'"',r.dias,r.diasId,(r.ader==null?'':r.ader),'"'+(r.cam||'')+'"','"'+r.status+'"','"'+PLANO_DEF[r.plano.cat].lab+'"','"'+r.plano.txt.replace(/"/g,'""')+'"',r.ult].join(';'))); baixarCsv(lines,'plano_acao_placas.csv'); }
 function renderBatimento(){
   const kbox=$('#opKpis'), box=$('#opBox'); const rows=batimentoRows();
   if(!rows){ kbox.innerHTML=''; box.innerHTML='<div class="empty">Carregue os relatórios de <b>Alertas</b> (dá a UO da Trimble por placa) e do <b>TMS</b> (centro de resultado) na aba <b>Dados</b> para ver o batimento de operação.</div>'; return; }
