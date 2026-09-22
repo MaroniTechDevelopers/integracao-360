@@ -176,6 +176,7 @@
   .seg.mov.unid{background:repeating-linear-gradient(45deg,var(--track-id-bad),var(--track-id-bad) 5px,color-mix(in srgb,var(--track-id-bad) 55%,#000) 5px,color-mix(in srgb,var(--track-id-bad) 55%,#000) 10px);color:#fff}
   .seg.idok{background:var(--track-id-ok)}
   .seg.idbad{background:var(--track-id-bad)}
+  .seg.iddiv{background:var(--serious);outline:2px solid var(--crit-ink);outline-offset:-2px;font-weight:700}
   .seg.fora{outline:2px dashed var(--serious);outline-offset:-2px}
   .seg.almoco{background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 4px,color-mix(in srgb,var(--critical) 60%,#000) 4px,color-mix(in srgb,var(--critical) 60%,#000) 8px);color:#fff}
   .lane-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--muted);font-style:italic;letter-spacing:.02em}
@@ -405,7 +406,7 @@
         <span class="lg"><span class="sw" style="background:transparent;outline:2px dashed var(--serious);outline-offset:-2px"></span> dedo duro (fora do ponto)</span>
         <span class="lg"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 3px,#0000 3px,#0000 6px)"></span> dirigiu no almoço</span>
         <span class="lg">alertas no horário: 📱 celular · ⏱️ velocidade · 😴 fadiga · 👁️ distração · 🔒 cinto — haste por severidade <b style="color:var(--critical)">alto</b>/<b style="color:var(--warning)">médio</b>/<b style="color:var(--s2)">baixo</b></span>
-        <span class="lg"><span class="sw" style="background:var(--track-id-ok)"></span> identificado &nbsp;<span class="sw" style="background:var(--track-id-bad)"></span> moveu sem identificação</span>
+        <span class="lg"><span class="sw" style="background:var(--track-id-ok)"></span> identificado &nbsp;<span class="sw" style="background:var(--serious);outline:2px solid var(--crit-ink);outline-offset:-2px"></span> câmera reconheceu OUTRO &nbsp;<span class="sw" style="background:var(--track-id-bad)"></span> sem identificação</span>
         <span class="lg" style="margin-left:auto;color:var(--muted)">🖱️ scroll = zoom · arraste = navegar</span>
       </div>
     </div>
@@ -1184,7 +1185,8 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data);
       for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
-      r.mov.forEach(s=>{ const fora=(r.entrada!=null&&(s.ini<r.entrada-CFG.tol||s.fim>r.saida+CFG.tol)); mov.push({a:off+s.ini,b:off+s.fim,km:s.km,placa:s.placa,fora}); if(s.placa)placas.add(s.placa); km+=s.km||0; ident.push({a:off+s.ini,b:off+s.fim,ok:true}); });
+      const idDiv=r.idDivergente||r.condutorDivergente; const idWho=r.idDivergente?(r.trimbleMot||''):(r.condutorDivergente?r.condutorPlan:'');
+      r.mov.forEach(s=>{ const fora=(r.entrada!=null&&(s.ini<r.entrada-CFG.tol||s.fim>r.saida+CFG.tol)); mov.push({a:off+s.ini,b:off+s.fim,km:s.km,placa:s.placa,fora}); if(s.placa)placas.add(s.placa); km+=s.km||0; ident.push({a:off+s.ini,b:off+s.fim,ok:true,div:idDiv,who:idWho}); });
       (r.movUnid||[]).forEach(s=> ident.push({a:off+s.ini,b:off+s.fim,ok:false}));
       (r.almocoDrivenSegs||[]).forEach(s=>almoco.push({a:off+s.ini,b:off+s.fim}));
       alertsForRec(r).forEach(al=>{ alertas.push({t:off+al.t,niv:al.niv,tipo:al.tipo}); if(al.niv==='A')nAlto++; });
@@ -1230,7 +1232,8 @@ function buildPlacaCards(placaQ, prefix, cap){
   const PD={}; const getPD=(pl,d)=>{ const k=pl+'|'+d; return (PD[k]=PD[k]||{placa:pl,data:d,id:[],un:[]}); };
   // identificado (dos registros — mostra a movimentação da placa mesmo que o motorista não bata com a busca)
   RECORDS.forEach(r=>{ const pl=rP(r).map(placaKey).find(p=>p.includes(pk0)); if(!pl) return; if(!passDia(r.data)) return; if(op && r.operacao!==op) return;
-    const g=getPD(pl,r.data); r.mov.forEach(s=> g.id.push({ini:s.ini,fim:s.fim,km:s.km||0,drv:r.motoristaEscala}) );
+    const g=getPD(pl,r.data); const idDiv=r.idDivergente||r.condutorDivergente; const idWho=r.idDivergente?(r.trimbleMot||''):(r.condutorDivergente?r.condutorPlan:'');
+    r.mov.forEach(s=> g.id.push({ini:s.ini,fim:s.fim,km:s.km||0,drv:r.motoristaEscala,div:idDiv,who:idWho}) );
     if(!MOV_UNSEG_STORE && r.movUnid) r.movUnid.forEach(s=> g.un.push([s.ini,s.fim]) ); });
   // sem identificação (do store por placa|dia — inclui placas sem NENHUM condutor identificado)
   if(MOV_UNSEG_STORE){ for(const key in MOV_UNSEG_STORE){ const i=key.indexOf('|'), pk=key.slice(0,i), d=key.slice(i+1); if(!pk.includes(pk0)) continue; if(!passDia(d)) continue; if(op){ const o=operacaoDaPlaca(pk); if(o && o!==op) continue; } const g=getPD(pk,d); MOV_UNSEG_STORE[key].forEach(s=>g.un.push(s)); } }
@@ -1246,7 +1249,7 @@ function buildPlacaCards(placaQ, prefix, cap){
   const html=shown.map((g,idx)=>{
     const id=prefix+idx; ids.push(id); const mov=[],ident=[]; let km=0,idMin=0,unMin=0; const drivers=new Set(), dias=new Set();
     g.days.forEach(pd=>{ const dIdx=Math.round((Date.parse(pd.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(pd.data);
-      pd.id.forEach(s=>{ mov.push({a:off+s.ini,b:off+s.fim,km:s.km,lab:firstName(s.drv)+' · '+hm(s.ini%1440)+'–'+hm(s.fim%1440)}); ident.push({a:off+s.ini,b:off+s.fim,ok:true}); km+=s.km; drivers.add(s.drv); idMin+=(s.fim-s.ini); });
+      pd.id.forEach(s=>{ mov.push({a:off+s.ini,b:off+s.fim,km:s.km,lab:firstName(s.drv)+' · '+hm(s.ini%1440)+'–'+hm(s.fim%1440)}); ident.push({a:off+s.ini,b:off+s.fim,ok:true,div:s.div,who:s.who}); km+=s.km; drivers.add(s.drv); idMin+=(s.fim-s.ini); });
       pd.un.forEach(s=>{ mov.push({a:off+s[0],b:off+s[1],lab:'sem ID · '+hm(s[0]%1440)+'–'+hm(s[1]%1440),unid:true}); ident.push({a:off+s[0],b:off+s[1],ok:false}); unMin+=(s[1]-s[0]); });
     });
     ZTL[id]={weekStart:g.start, ponto:[], mov, almoco:[], alertas:[], ident, t0:0, t1:g.total, total:g.total};
@@ -1311,7 +1314,7 @@ function renderZoom(id){
   const laneAl=el.querySelector('.lane[data-k="alertas"]');
   if(laneAl){ laneAl.innerHTML=gl+(st.alertas||[]).map(al=>{ const p=pos(al.t); if(p<-1||p>101) return ''; const cls=al.niv==='A'?'alto':al.niv==='M'?'medio':'baixo'; return `<span class="amark ${cls}" style="left:${p}%" title="${hm(al.t%1440)} · ${tipoLabel(al.tipo)} · ${nivName(al.niv)}"><i>${alertaIcon(al.tipo)}</i></span>`; }).join(''); }
   const laneId=el.querySelector('.lane[data-k="ident"]');
-  if(laneId){ laneId.innerHTML=gl+(st.ident||[]).map(s=>seg(s.ok?'idok':'idbad',s.a,s.b,hm(s.a%1440)+'–'+hm(s.b%1440)+(s.ok?' · identificado':' · SEM identificação'),s.ok?'':'idnao')).join(''); }
+  if(laneId){ laneId.innerHTML=gl+(st.ident||[]).map(s=>{ const cls=s.div?'iddiv':(s.ok?'idok':'idbad'); const lab=hm(s.a%1440)+'–'+hm(s.b%1440)+(s.div?(' · ⚠ câmera: '+firstName(s.who||'?')):(s.ok?' · identificado':' · SEM identificação')); return seg(cls,s.a,s.b,lab); }).join(''); }
 }
 function setupZoom(id){
   const el=document.getElementById(id); if(!el) return; renderZoom(id);
