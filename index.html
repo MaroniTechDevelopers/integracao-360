@@ -450,7 +450,11 @@
 
   <!-- ===== DIVERGÊNCIAS ===== -->
   <section class="view" id="view-diverg">
-    <div class="sec-title"><h2>Divergências detectadas</h2><span id="divCount"></span></div>
+    <div class="sec-title"><h2>Divergências detectadas</h2><span id="divCount"></span>
+      <label style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Tipo de divergência
+        <select id="fTipoDiv" style="color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 10px;font:inherit;font-size:13px;text-transform:none;letter-spacing:normal;cursor:pointer"><option value="">Todos</option></select>
+      </label>
+    </div>
     <div class="grid" id="divList"></div>
   </section>
 
@@ -955,27 +959,27 @@ function analyze(rec){
   const horaExtra = (hasPonto && horasPonto>CFG.jornadaMin) ? (horasPonto-CFG.jornadaMin) : 0;
   const semSegs=segs.filter(s=>s.ini!=null&&s.fim!=null).length===0; // sem identificação Trimble
   // PENDÊNCIAS: falta dado p/ conferir (não é "confere", é "não encontrado")
-  if(BASES.mov && mov.length===0 && hasPonto) flags.push({sev:'pendente',t:'Movimentação do veículo não encontrada'});
-  if(BASES.trim && semSegs && (hasPonto||hasMov)) flags.push({sev:'pendente',t:'Identificação Trimble não encontrada'});
+  if(BASES.mov && mov.length===0 && hasPonto) flags.push({sev:'pendente',k:'mov_nao_enc',t:'Movimentação do veículo não encontrada'});
+  if(BASES.trim && semSegs && (hasPonto||hasMov)) flags.push({sev:'pendente',k:'id_nao_enc',t:'Identificação Trimble não encontrada'});
   // DIVERGÊNCIAS reais
-  if(BASES.ponto && BASES.mov && hasMov && !hasPonto) flags.push({sev:'critico',t:'Movimento sem registro de ponto'});
-  if(BASES.ponto && BASES.mov && hasPonto && mov.length && horasMov<movMin) flags.push({sev:'atencao',t:'Veículo praticamente sem movimento'});
-  if(BASES.trim && trimbleMot && norm(trimbleMot)!==norm(rec.motoristaEscala)) flags.push({sev:'critico',t:'Identificação divergente — câmera reconheceu '+firstName(trimbleMot)});
-  if(BASES.trim && semelhanca!=null && semelhanca<CFG.sem) flags.push({sev:'atencao',t:'Semelhança facial baixa ('+semelhanca+'%)'});
-  if(BASES.ponto && BASES.mov && foraJornada>CFG.fora) flags.push({sev:'atencao',t:'Dedo duro: '+hm(foraJornada)+' fora da jornada'});
-  if(BASES.ponto && BASES.mov && hasPonto && primMov!=null && primMov < entrada-tol) flags.push({sev:'atencao',t:'Veículo em movimento antes da entrada'});
+  if(BASES.ponto && BASES.mov && hasMov && !hasPonto) flags.push({sev:'critico',k:'mov_sem_ponto',t:'Movimento sem registro de ponto'});
+  if(BASES.ponto && BASES.mov && hasPonto && mov.length && horasMov<movMin) flags.push({sev:'atencao',k:'sem_mov',t:'Veículo praticamente sem movimento'});
+  if(BASES.trim && trimbleMot && norm(trimbleMot)!==norm(rec.motoristaEscala)) flags.push({sev:'critico',k:'id_diverg',t:'Identificação divergente — câmera reconheceu '+firstName(trimbleMot)});
+  if(BASES.trim && semelhanca!=null && semelhanca<CFG.sem) flags.push({sev:'atencao',k:'semelhanca_baixa',t:'Semelhança facial baixa ('+semelhanca+'%)'});
+  if(BASES.ponto && BASES.mov && foraJornada>CFG.fora) flags.push({sev:'atencao',k:'dedo_duro',t:'Dedo duro: '+hm(foraJornada)+' fora da jornada'});
+  if(BASES.ponto && BASES.mov && hasPonto && primMov!=null && primMov < entrada-tol) flags.push({sev:'atencao',k:'mov_antes_entrada',t:'Veículo em movimento antes da entrada'});
   // ALMOÇO
-  if(BASES.ponto && BASES.mov && almocoDirigido>=10) flags.push({sev:'atencao',t:'Marcou almoço mas conduziu na pausa ('+hm(almocoDirigido)+')'});
-  if(BASES.ponto && BASES.mov && semPausa && hasMov) flags.push({sev:'atencao',t:'Jornada sem intervalo de almoço (seguiu direto)'});
+  if(BASES.ponto && BASES.mov && almocoDirigido>=10) flags.push({sev:'atencao',k:'almoco_dirigido',t:'Marcou almoço mas conduziu na pausa ('+hm(almocoDirigido)+')'});
+  if(BASES.ponto && BASES.mov && semPausa && hasMov) flags.push({sev:'atencao',k:'sem_pausa',t:'Jornada sem intervalo de almoço (seguiu direto)'});
   // HORA EXTRA (jornada acima de 7h20)
-  if(BASES.ponto && horaExtra>0) flags.push({sev:'atencao',t:'Hora extra: '+hm(horaExtra)+' acima de 7h20 de jornada'});
+  if(BASES.ponto && horaExtra>0) flags.push({sev:'atencao',k:'hora_extra',t:'Hora extra: '+hm(horaExtra)+' acima de 7h20 de jornada'});
   // CONDUTOR NÃO VINCULADO À PLACA (pedido) — quem foi identificado dirigindo ≠ quem estava no pedido
   let plannedCpf='';
   if(typeof PED_DRV!=='undefined' && PED_DRV){ for(const p of placasR){ const cf=PED_DRV[placaKey(p)+'|'+rec.data]; if(cf){ plannedCpf=cf; break; } } }
   const idCpf = (typeof NOME2CPF!=='undefined' && NOME2CPF) ? NOME2CPF[norm(rec.motoristaEscala)] : '';
   let condutorDivergente=false, condutorPlan='';
   if(plannedCpf && idCpf && plannedCpf!==idCpf){ condutorDivergente=true; condutorPlan=(typeof CPF2NOME!=='undefined'&&CPF2NOME&&CPF2NOME[plannedCpf])||('CPF '+plannedCpf); }
-  if(condutorDivergente && hasMov) flags.push({sev:'critico',t:'Condutor não vinculado à placa — pedido previa '+firstName(condutorPlan)});
+  if(condutorDivergente && hasMov) flags.push({sev:'critico',k:'condutor_nao_vinc',t:'Condutor não vinculado à placa — pedido previa '+firstName(condutorPlan)});
 
   let sev = flags.some(f=>f.sev==='critico') ? 'critico'
           : flags.some(f=>f.sev==='atencao') ? 'atencao'
@@ -1769,15 +1773,27 @@ function exportPainelPDF(){
 /* ============================================================
    RENDER — DIVERGÊNCIAS
    ============================================================ */
+const DIV_TIPOS={mov_sem_ponto:'Movimento sem registro de ponto', id_diverg:'Identificação divergente (câmera)', condutor_nao_vinc:'Condutor não vinculado à placa', dedo_duro:'Dedo duro (fora da jornada)', hora_extra:'Hora extra (>7h20)', almoco_dirigido:'Conduziu no almoço', sem_pausa:'Jornada sem intervalo de almoço', mov_antes_entrada:'Movimento antes da entrada', semelhanca_baixa:'Semelhança facial baixa', sem_mov:'Praticamente sem movimento', mov_nao_enc:'Movimentação não encontrada', id_nao_enc:'Identificação não encontrada'};
+function tipoDivKey(f){ return f.k || norm(String(f.t||'').replace(/[:(].*$/,'')); }
+function tipoDivLabel(k){ return DIV_TIPOS[k] || k; }
 function renderDiverg(rows){
   const div=rows.filter(r=>r.sev!=='conforme');
-  const items=[];
+  let items=[];
   div.forEach(r=> r.flags.forEach(f=> items.push({r,f})) );
+  // popular o filtro de TIPO (contagem por tipo) preservando a seleção
+  const cnt={}; items.forEach(({f})=>{ const k=tipoDivKey(f); cnt[k]=(cnt[k]||0)+1; });
+  const selEl=$('#fTipoDiv'); const cur=selEl?selEl.value:'';
+  if(selEl){ const opts=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+    selEl.innerHTML='<option value="">Todos os tipos ('+items.length.toLocaleString('pt-BR')+')</option>'+opts.map(k=>`<option value="${k}">${tipoDivLabel(k)} (${cnt[k].toLocaleString('pt-BR')})</option>`).join('');
+    selEl.value = cnt[cur]!=null ? cur : ''; }
+  const tipoSel = selEl?selEl.value:'';
+  if(tipoSel) items=items.filter(({f})=>tipoDivKey(f)===tipoSel);
   const sevRank={critico:0,atencao:1,pendente:2,info:3};
   items.sort((a,b)=> (sevRank[a.f.sev]-sevRank[b.f.sev]) || (a.r.data<b.r.data?1:-1));
-  $('#divCount').textContent = items.length.toLocaleString('pt-BR')+' apontamento'+(items.length!==1?'s':'')+' em '+div.length.toLocaleString('pt-BR')+' motorista-dia'+(div.length!==1?'s':'');
+  const motDias=new Set(items.map(it=>it.r.motoristaEscala+'|'+it.r.data)).size;
+  $('#divCount').textContent = items.length.toLocaleString('pt-BR')+' apontamento'+(items.length!==1?'s':'')+' em '+motDias.toLocaleString('pt-BR')+' motorista-dia'+(motDias!==1?'s':'')+(tipoSel?' · '+tipoDivLabel(tipoSel):'');
   $('#badgeDiv').textContent = div.length>999?'999+':div.length;
-  if(!items.length){ $('#divList').innerHTML='<div class="empty">Nenhuma divergência ou pendência no filtro atual. ✔️</div>'; return; }
+  if(!items.length){ $('#divList').innerHTML='<div class="empty">Nenhuma divergência'+(tipoSel?' do tipo <b>'+tipoDivLabel(tipoSel)+'</b>':'')+' no filtro atual. ✔️</div>'; return; }
   const CAP=250, shown=items.slice(0,CAP);
   $('#divList').innerHTML = shown.map(({r,f})=>`
     <div class="card divcard" data-mot="${encodeURIComponent(r.motoristaEscala)}" data-dia="${r.data}" title="ver na linha do tempo" style="display:flex;gap:14px;align-items:center;padding:13px 16px;cursor:pointer">
@@ -1790,7 +1806,7 @@ function renderDiverg(rows){
         Ponto ${r.entrada!=null?hm(r.entrada)+'–'+hm(r.saida):'—'}<br>Direção ${r.primMov!=null?hm(r.primMov)+'–'+hm(r.ultMov):'—'}
       </div>
       <span style="flex:none;color:var(--gold-2);font-size:14px">↗</span>
-    </div>`).join('') + (items.length>CAP?`<div class="empty">Mostrando ${CAP} de ${items.length.toLocaleString('pt-BR')} — filtre por operação, motorista ou situação.</div>`:'');
+    </div>`).join('') + (items.length>CAP?`<div class="empty">Mostrando ${CAP} de ${items.length.toLocaleString('pt-BR')} — filtre por <b>tipo</b>, operação, motorista ou situação.</div>`:'');
 }
 
 /* ============================================================
@@ -2696,6 +2712,7 @@ $('#kpis').addEventListener('click',e=>{ const c=e.target.closest('.kpi[data-tab
 function focusRecord(mot, dia){ ['#fFecha','#fOp','#fStatus'].forEach(s=>$(s).value=''); $('#fBusca').value=''; $('#fDe').value=''; $('#fAte').value=''; $('#fMot').value=mot; $('#fDia').value=dia; renderAll(); goTab('linha'); }
 // clicar num apontamento das Divergências → linha do tempo daquele motorista+dia
 $('#divList').addEventListener('click',e=>{ const c=e.target.closest('.divcard'); if(!c)return; focusRecord(decodeURIComponent(c.dataset.mot), c.dataset.dia); });
+$('#fTipoDiv').addEventListener('change',()=>renderDiverg(filtered()));
 // clicar numa operação na aba Aderência → Resumo dessa operação
 $('#aderBox').addEventListener('click',e=>{
   const gp=e.target.closest('[data-goplacas]'); if(gp){ $('#fOp').value=decodeURIComponent(gp.dataset.goplacas); $('#fBusca').value=''; renderAll(); goTab('semid'); return; }
@@ -2723,7 +2740,7 @@ $('#fichaPdf').onclick=exportFichaPDF;
 // filtros
 ['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus'].forEach(s=>$(s).addEventListener('change',renderAll));
 $('#fBusca').addEventListener('input',renderAll);
-$('#clearFilters').onclick=()=>{ ['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus'].forEach(s=>$(s).value=''); $('#fBusca').value=''; renderAll(); };
+$('#clearFilters').onclick=()=>{ ['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus','#fTipoDiv'].forEach(s=>{const el=$(s); if(el)el.value='';}); $('#fBusca').value=''; renderAll(); };
 // ordenação tabela
 $$('#tbl thead th').forEach(th=>th.onclick=()=>{ const k=th.dataset.k; SORT.dir = (SORT.k===k)? -SORT.dir : (k==='_sev'?1:1); SORT.k=k; renderTable(filtered()); });
 $('#expCsv').onclick=exportCsv;
