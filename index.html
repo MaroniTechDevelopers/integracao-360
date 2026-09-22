@@ -1608,12 +1608,12 @@ function renderSaude(){
   kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
   const chip={critico:'<span class="chip critico">Acionar</span>',atencao:'<span class="chip atencao">Em manut.</span>',pendente:'<span class="chip pendente">Sem câmera</span>',conforme:'<span class="chip conforme">OK</span>'};
   const cor=c=>c==='ok'?'var(--good-ink)':c==='bad'?'var(--crit-ink)':c==='warn'?'var(--serious)':'var(--muted)';
-  box.innerHTML='<div class="tblwrap"><table style="min-width:820px"><thead><tr><th>Cavalo</th><th>OP</th><th>Funcionalidade</th><th>Identificação (dados)</th><th>Aderência</th><th>Ação</th></tr></thead><tbody>'+
-    rows.map(r=>`<tr><td class="tnum">${r.placa}</td><td>${r.op||'—'}</td>
+  box.innerHTML='<div class="tblwrap"><table style="min-width:840px"><thead><tr><th>Cavalo</th><th>OP</th><th>Funcionalidade</th><th>Identificação (dados)</th><th>Aderência</th><th>Ação</th><th></th></tr></thead><tbody>'+
+    rows.map(r=>`<tr class="sauderow" data-placa="${r.placa}" title="ver a linha do tempo desta placa" style="cursor:pointer"><td class="tnum">${r.placa}</td><td>${r.op||'—'}</td>
       <td><span style="color:${cor(r.farol.cls)}">${r.func||'—'}</span></td>
       <td style="color:${r.idCls==='ok'?'var(--good-ink)':r.idCls==='bad'?'var(--crit-ink)':'var(--muted)'}">${r.idStatus}</td>
       <td class="tnum">${r.ader==null?'—':r.ader+'%'}</td>
-      <td>${chip[r.acaoCls]||''}</td></tr>`).join('')+
+      <td>${chip[r.acaoCls]||''}</td><td style="color:var(--gold-2)">↗</td></tr>`).join('')+
     '</tbody></table></div>';
 }
 function exportSaude(){
@@ -1659,7 +1659,8 @@ function renderPlacasSemId(){
   const kbox=$('#semidKpis'), box=$('#semidBox');
   if(!PLACA_MOV || !Object.keys(PLACA_MOV).length){ kbox.innerHTML=''; box.innerHTML='<div class="empty">Carregue a <b>Movimentação</b> na aba <b>Dados</b> para listar as placas que se moveram sem identificação do condutor. (precisa que o relatório traga o movimento mesmo sem motorista)</div>'; SEMID_ROWS=[]; return; }
   const rk={critico:0,atencao:1};
-  const rows=Object.keys(PLACA_MOV).map(pk=>{ const g=PLACA_MOV[pk];
+  const opF=$('#fOp').value;
+  const rows=Object.keys(PLACA_MOV).filter(pk=> !opF || operacaoDaPlaca(pk)===opF).map(pk=>{ const g=PLACA_MOV[pk];
     const ader = g.tot>0? Math.round(g.idn/g.tot*100) : null;
     const op = operacaoDaPlaca(pk) || (PLACA_UO&&PLACA_UO[pk]&&PLACA_UO[pk].uoCurta) || '—';
     const cam = SAUDE&&SAUDE[pk] ? (SAUDE[pk].func||SAUDE[pk].status||'') : '';
@@ -1670,20 +1671,21 @@ function renderPlacasSemId(){
     return {placa:pk, op, dias:g.dias, diasId:g.diasId, ader, cam, status, cls, ult:g.ult};
   }).filter(r=>r.cls!=='ok').sort((a,b)=> (rk[a.cls]-rk[b.cls]) || (a.ader||0)-(b.ader||0) || b.dias-a.dias);
   SEMID_ROWS=rows;
-  const totPlacas=Object.keys(PLACA_MOV).length, semNenhum=rows.filter(r=>r.cls==='critico').length, baixa=rows.filter(r=>r.cls==='atencao').length;
+  const totPlacas=Object.keys(PLACA_MOV).filter(pk=> !opF || operacaoDaPlaca(pk)===opF).length, semNenhum=rows.filter(r=>r.cls==='critico').length, baixa=rows.filter(r=>r.cls==='atencao').length;
   const K=[
-    {lab:'Placas que se moveram',val:totPlacas.toLocaleString('pt-BR'),sub:'no período',ac:'var(--s2)'},
+    {lab:'Placas que se moveram',val:totPlacas.toLocaleString('pt-BR'),sub:(opF?opF:'no período'),ac:'var(--s2)'},
     {lab:'Sem NENHUMA identificação',val:semNenhum,sub:'câmera não reconheceu ninguém',ac:'var(--critical)'},
     {lab:'Identificação baixa',val:baixa,sub:'abaixo do mínimo ('+CFG.sem+'%)',ac:'var(--warning)'},
     {lab:'Para ação',val:rows.length,sub:'total nesta lista',ac:'var(--serious)'},
   ];
   kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
-  if(!rows.length){ box.innerHTML='<div class="empty">🎉 Todas as placas que se moveram tiveram condutor identificado dentro do mínimo.</div>'; return; }
+  if(!rows.length){ box.innerHTML='<div class="empty">🎉 '+(opF?'Nenhuma placa da operação <b>'+opF+'</b> ':'Todas as placas que se moveram tiveram condutor identificado dentro do mínimo.')+(opF?'para ação — tudo identificado dentro do mínimo.':'')+'</div>'; return; }
   const chip={critico:'<span class="chip critico">Sem ID</span>',atencao:'<span class="chip atencao">ID baixa</span>'};
-  box.innerHTML='<div class="tblwrap"><table style="min-width:840px"><thead><tr><th>Placa</th><th>Operação</th><th>Dias moveu</th><th>Dias c/ ID</th><th>Aderência</th><th>Câmera (saúde)</th><th>Últ. mov.</th><th>Situação</th></tr></thead><tbody>'+
-    rows.map(r=>`<tr><td class="tnum">${r.placa}</td><td>${r.op}</td><td class="tnum">${r.dias}</td><td class="tnum">${r.diasId}</td>
+  box.innerHTML=(opF?'<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)">Filtrado por operação <b>'+opF+'</b> · '+rows.length+' placa(s) p/ ação · clique numa placa para ver a linha do tempo dela</div>':'')+
+    '<div class="tblwrap"><table style="min-width:860px"><thead><tr><th>Placa</th><th>Operação</th><th>Dias moveu</th><th>Dias c/ ID</th><th>Aderência</th><th>Câmera (saúde)</th><th>Últ. mov.</th><th>Situação</th><th></th></tr></thead><tbody>'+
+    rows.map(r=>`<tr class="semidrow" data-placa="${r.placa}" title="ver a linha do tempo desta placa" style="cursor:pointer"><td class="tnum">${r.placa}</td><td>${r.op}</td><td class="tnum">${r.dias}</td><td class="tnum">${r.diasId}</td>
       <td class="tnum" style="color:${r.ader===0?'var(--crit-ink)':(r.ader<CFG.sem?'var(--serious)':'inherit')}">${r.ader==null?'—':r.ader+'%'}</td>
-      <td>${r.cam||'—'}</td><td class="tnum">${r.ult?brDate(r.ult):'—'}</td><td>${chip[r.cls]||''}</td></tr>`).join('')+
+      <td>${r.cam||'—'}</td><td class="tnum">${r.ult?brDate(r.ult):'—'}</td><td>${chip[r.cls]||''}</td><td style="color:var(--gold-2)">↗</td></tr>`).join('')+
     '</tbody></table></div>';
 }
 function exportSemId(){ if(!SEMID_ROWS.length){toast('Nada para exportar');return;} const head=['Placa','Operacao','Dias_moveu','Dias_com_ID','Aderencia_pct','Camera_saude','Ultima_mov','Situacao']; const lines=[head.join(';')]; SEMID_ROWS.forEach(r=>lines.push([r.placa,'"'+r.op+'"',r.dias,r.diasId,(r.ader==null?'':r.ader),'"'+(r.cam||'')+'"',r.ult,'"'+r.status+'"'].join(';'))); baixarCsv(lines,'placas_sem_identificacao.csv'); }
@@ -2301,6 +2303,10 @@ function focusRecord(mot, dia){ ['#fFecha','#fOp','#fStatus'].forEach(s=>$(s).va
 $('#divList').addEventListener('click',e=>{ const c=e.target.closest('.divcard'); if(!c)return; focusRecord(decodeURIComponent(c.dataset.mot), c.dataset.dia); });
 // clicar numa operação na aba Aderência → Resumo dessa operação
 $('#aderBox').addEventListener('click',e=>{ const c=e.target.closest('.adercard'); if(!c)return; $('#fOp').value=decodeURIComponent(c.dataset.op); renderAll(); goTab('semana'); });
+// clicar numa placa em "Placas sem ID" → Linha do tempo daquela placa
+$('#semidBox').addEventListener('click',e=>{ const tr=e.target.closest('.semidrow'); if(!tr)return; $('#fBusca').value=tr.dataset.placa; $('#fDia').value=''; $('#fDe').value=''; $('#fAte').value=''; renderAll(); goTab('linha'); });
+// clicar numa placa na Saúde das câmeras → Linha do tempo daquela placa
+$('#saudeBox').addEventListener('click',e=>{ const tr=e.target.closest('.sauderow'); if(!tr)return; $('#fBusca').value=tr.dataset.placa; $('#fDia').value=''; $('#fDe').value=''; $('#fAte').value=''; renderAll(); goTab('linha'); });
 // capinha do motorista → detalhamento (ficha)
 $('#semanaBox').addEventListener('click',e=>{ const c=e.target.closest('.capinha'); if(!c)return; openFicha(decodeURIComponent(c.dataset.mot)); });
 $('#fichaBack').onclick=voltarResumo;
