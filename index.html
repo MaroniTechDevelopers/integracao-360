@@ -666,7 +666,7 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('sh
 function norm(s){ return (s==null?'':String(s)).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toUpperCase().replace(/\s+/g,' '); }
 function toMin(hhmm){ if(hhmm==null) return null; const m=String(hhmm).match(/(\d{1,2}):(\d{2})/); if(!m) return null; return (+m[1])*60+(+m[2]); }
 function hm(min){ if(min==null||isNaN(min)) return '—'; min=Math.round(min); const h=Math.floor(min/60), m=min%60; return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
-function hDec(min){ if(min==null||isNaN(min)) return '—'; return (min/60).toFixed(1).replace('.',',')+'h'; }
+function hDec(min){ if(min==null||isNaN(min)) return '—'; min=Math.round(min); if(min<=0) return '0h'; const h=Math.floor(min/60), m=min%60; return h>0 ? (m>0 ? h+'h'+String(m).padStart(2,'0') : h+'h') : m+'min'; }
 function isoDate(s){ if(!s) return ''; s=String(s).trim();
   let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`;
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(m){ let y=m[3].length===2?'20'+m[3]:m[3]; return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`; }
@@ -1090,14 +1090,14 @@ function renderKpis(rows){
   const opSel = $('#fOp').value;
   const K=[
     {lab:'① Identificação'+(opSel?' — '+opSel:''),val:(identSel==null?'—':identSel+'<small>%</small>'),sub:(identSel==null?'sem dado de identificação':'aderência da câmera'+(opSel?' na operação':' (frota)')),ac:(identSel==null?'var(--muted)':(identSel>=CFG.sem?'var(--good)':'var(--critical)')),tab:'semid'},
-    {lab:'③ Dedo duro real',val:hDec(dedo).replace('h','')+'<small>h</small>',sub:motsDedo+' motorista(s) · fora da jornada c/ ponto',ac:'var(--serious)',tab:'diverg'},
+    {lab:'③ Dedo duro real',val:hDec(dedo),sub:motsDedo+' motorista(s) · fora da jornada c/ ponto',ac:'var(--serious)',tab:'diverg'},
     {lab:'Cobertura de ponto',val:(cobPonto==null?'—':cobPonto+'<small>%</small>'),sub:'dias com movimento que têm ponto',ac:(cobPonto==null?'var(--muted)':(cobPonto>=90?'var(--good)':cobPonto>=70?'var(--warning)':'var(--critical)')),tab:'tabela'},
     {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto (pendência)',ac:'var(--critical)',tab:'diverg'},
     {lab:'Ponto sem movimento',val:pontoSemMov,sub:'bateu ponto e não dirigiu',ac:'var(--warning)',tab:'tabela'},
     alertKpi
       ? {lab:'⚠ Alertas (câmera/telemetria)',val:alertKpi.tot.toLocaleString('pt-BR'),sub:(alertKpi.alto?alertKpi.alto+' motorista(s) c/ nível alto':alertKpi.nmot+' motorista(s) c/ alerta'),ac:'var(--s7)',tab:'linha'}
       : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)',tab:'media'},
-    {lab:'Horas extras (&gt;7h20)',val:hDec(hex).replace('h','')+'<small>h</small>',sub:motsHex+' motorista(s) acima da jornada',ac:hex>0?'var(--warning)':'var(--muted)',tab:'tabela'},
+    {lab:'Horas extras (&gt;7h20)',val:hDec(hex),sub:motsHex+' motorista(s) acima da jornada',ac:hex>0?'var(--warning)':'var(--muted)',tab:'tabela'},
   ];
   if(placOk!=null){ K.splice(1,0,
     {lab:'Placas OK (câmera)',val:placOk,sub:'identificando dentro do mínimo',ac:'var(--good)',tab:'semid'},
@@ -1115,7 +1115,7 @@ function riscoComposto(m, alR){
   if(m.ident!=null && m.ident<CFG.sem){ reasons.push('identificação '+m.ident+'%'); if(m.ident<50) grave=true; }
   if(m.media!=null && m.meta && m.media<m.meta) reasons.push('média '+m.media.toFixed(2).replace('.',',')+' < meta '+m.meta.toFixed(2).replace('.',','));
   const alto=(alR&&alR.niveis&&alR.niveis.ALTO)||0; if(alto>0){ reasons.push(alto+' alerta(s) nível alto'); if(alto>=5) grave=true; }
-  const ddH=(m.ddReal||0)/60; if(ddH>=2) reasons.push('dedo duro real '+ddH.toFixed(1).replace('.',',')+'h');
+  const ddH=(m.ddReal||0)/60; if(ddH>=2) reasons.push('dedo duro real '+hDec(m.ddReal));
   const n=reasons.length;
   const cls = (n>=2||grave) ? 'vermelho' : (n===1 ? 'amarelo' : 'verde');
   return {cls, reasons, n};
@@ -1606,9 +1606,9 @@ function renderFicha(){
       <div class="card kpi"><div class="accent" style="background:var(--s5)"></div>
         <div class="lab">① Aderência facial</div><div class="val tnum">${semel==null?'—':semel+'<small>%</small>'}</div><div class="sub">semelhança média (câmera)</div></div>
       <div class="card kpi"><div class="accent" style="background:var(--serious)"></div>
-        <div class="lab">③ Dedo duro real</div><div class="val tnum">${hDec(ddRealTotal).replace('h','')}<small>h</small></div><div class="sub">fora da jornada (com ponto)${ddTotal-ddRealTotal>60?' · +'+hDec(ddTotal-ddRealTotal)+' sem ponto':''}</div></div>
+        <div class="lab">③ Dedo duro real</div><div class="val tnum">${hDec(ddRealTotal)}</div><div class="sub">fora da jornada (com ponto)${ddTotal-ddRealTotal>60?' · +'+hDec(ddTotal-ddRealTotal)+' sem ponto':''}</div></div>
       <div class="card kpi"><div class="accent" style="background:${hexTotal>0?'var(--warning)':'var(--muted)'}"></div>
-        <div class="lab">Hora extra (&gt;7h20)</div><div class="val tnum">${hDec(hexTotal).replace('h','')}<small>h</small></div><div class="sub">${diasHex} dia(s) acima da jornada</div></div>
+        <div class="lab">Hora extra (&gt;7h20)</div><div class="val tnum">${hDec(hexTotal)}</div><div class="sub">${diasHex} dia(s) acima da jornada</div></div>
       <div class="card kpi"><div class="accent" style="background:${(alR.niveis&&alR.niveis.ALTO)?'var(--critical)':(totAl>0?'var(--warning)':'var(--muted)')}"></div>
         <div class="lab">Alertas (total)</div><div class="val tnum">${totAl.toLocaleString('pt-BR')}</div><div class="sub">${alR.real?'no período':'na câmera Trimble'}${alR.niveis&&alR.niveis.ALTO?' · '+alR.niveis.ALTO+' alto':''}</div></div>
     </div>
@@ -1702,8 +1702,8 @@ function exportFichaPDF(){
   const kpis=`<div class="kgrid">
     ${pdfKpi('④ Média realizada', (M.mediaR==null?'—':nf(M.mediaR)), 'meta '+nf(M.metaFicha)+(M.mediaR!=null?(M.medaOk?' ✓':' ✗'):''), M.medaOk?'#10b981':'#ef4444')}
     ${pdfKpi('① Aderência facial', (M.semel==null?'—':M.semel+'<small>%</small>'), 'semelhança média (câmera)', M.semel==null?'#94a3b8':(M.semel>=CFG.sem?'#10b981':'#ef4444'))}
-    ${pdfKpi('③ Dedo duro real', hDec(M.ddRealTotal).replace('h','')+'<small>h</small>', 'fora da jornada c/ ponto', M.ddRealTotal>=120?'#ef4444':(M.ddRealTotal>0?'#f59e0b':'#10b981'))}
-    ${pdfKpi('Hora extra (&gt;7h20)', hDec(M.hexTotal).replace('h','')+'<small>h</small>', M.diasHex+' dia(s) acima', M.hexTotal>0?'#f59e0b':'#94a3b8')}
+    ${pdfKpi('③ Dedo duro real', hDec(M.ddRealTotal), 'fora da jornada c/ ponto', M.ddRealTotal>=120?'#ef4444':(M.ddRealTotal>0?'#f59e0b':'#10b981'))}
+    ${pdfKpi('Hora extra (&gt;7h20)', hDec(M.hexTotal), M.diasHex+' dia(s) acima', M.hexTotal>0?'#f59e0b':'#94a3b8')}
     ${pdfKpi('Alertas (total)', M.totAl.toLocaleString('pt-BR'), (alto?alto+' de nível alto':(M.alR.real?'no período':'câmera Trimble')), alto?'#ef4444':(M.totAl>0?'#f59e0b':'#94a3b8'))}
   </div>`;
   const pontos=`<div class="cols">
@@ -1748,16 +1748,16 @@ function exportPainelPDF(){
   const opSel=$('#fOp').value;
   let kg=`<div class="kgrid p6">
     ${pdfKpi('① Identificação'+(opSel?' · '+pdfEsc(opSel):''), (identSel==null?'—':identSel+'<small>%</small>'), 'aderência da câmera', identSel==null?'#94a3b8':(identSel>=CFG.sem?'#10b981':'#ef4444'))}
-    ${pdfKpi('③ Dedo duro real', hDec(dedo).replace('h','')+'<small>h</small>', motsDedo+' motorista(s)', '#f97316')}
+    ${pdfKpi('③ Dedo duro real', hDec(dedo), motsDedo+' motorista(s)', '#f97316')}
     ${pdfKpi('Cobertura de ponto', (cobPonto==null?'—':cobPonto+'<small>%</small>'), 'dias c/ mov. que têm ponto', cobPonto==null?'#94a3b8':(cobPonto>=90?'#10b981':cobPonto>=70?'#f59e0b':'#ef4444'))}
     ${pdfKpi('Movimento sem ponto', movSemPonto, 'dirigiu e não bateu ponto', '#ef4444')}
     ${pdfKpi('Ponto sem movimento', pontoSemMov, 'bateu ponto e não dirigiu', '#f59e0b')}
-    ${ (ALERTS||BOL) ? pdfKpi('⚠ Alertas', alertTot.toLocaleString('pt-BR'), (alertAlto?alertAlto+' motorista(s) nível alto':'no período'), '#ef4444') : pdfKpi('Horas extras', hDec(hex).replace('h','')+'<small>h</small>', 'acima de 7h20', hex>0?'#f59e0b':'#94a3b8') }
+    ${ (ALERTS||BOL) ? pdfKpi('⚠ Alertas', alertTot.toLocaleString('pt-BR'), (alertAlto?alertAlto+' motorista(s) nível alto':'no período'), '#ef4444') : pdfKpi('Horas extras', hDec(hex), 'acima de 7h20', hex>0?'#f59e0b':'#94a3b8') }
   </div>`;
   if(placOk!=null){ kg+=`<div class="kgrid p6" style="grid-template-columns:repeat(3,1fr)">
     ${pdfKpi('Placas OK (câmera)', placOk, 'identificando no mínimo', '#10b981')}
     ${pdfKpi('Placas p/ ação', placAcao, (placZero?placZero+' sem NENHUMA ID · ':'')+'equipamento/sistêmico', placAcao?'#ef4444':'#10b981')}
-    ${pdfKpi('Horas extras', hDec(hex).replace('h','')+'<small>h</small>', 'acima de 7h20', hex>0?'#f59e0b':'#94a3b8')}
+    ${pdfKpi('Horas extras', hDec(hex), 'acima de 7h20', hex>0?'#f59e0b':'#94a3b8')}
   </div>`; }
 
   const farol=`<h2 class="sec">Farol de risco — motoristas</h2>
