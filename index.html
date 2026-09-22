@@ -970,12 +970,12 @@ function build(){
   BASES = REAL ? Object.assign({ponto:true,mov:true,trim:false}, RAW.bases||{})
                : { ponto:true, mov:true, trim:true };
   RECORDS = base.map(analyze);
-  // operação do MOTORISTA: dias sem placa (só ponto) não resolvem a operação e ficam "—";
-  // herdam a operação predominante do condutor (dos dias em que deu p/ resolver) — assim aparecem no filtro por operação
+  // operação = do VEÍCULO (UO/placa). Só dias SEM veículo (só ponto) herdam a operação predominante
+  // do condutor — assim NÃO empurramos veículos para a operação do motorista (contagem por operação fica certa).
   const byDrv={};
   RECORDS.forEach(r=>{ if(r.operacao && r.operacao!=='—'){ const k=norm(r.motoristaEscala); const g=(byDrv[k]=byDrv[k]||{}); g[r.operacao]=(g[r.operacao]||0)+(r.horasMov||1); } });
   const drvOp={}; for(const k in byDrv){ let best='',bv=-1; for(const op in byDrv[k]){ if(byDrv[k][op]>bv){bv=byDrv[k][op];best=op;} } if(best)drvOp[k]=best; }
-  RECORDS.forEach(r=>{ if((!r.operacao||r.operacao==='—') && drvOp[norm(r.motoristaEscala)]) r.operacao=drvOp[norm(r.motoristaEscala)]; });
+  RECORDS.forEach(r=>{ const semVeic=!((r.placas&&r.placas.length)||r.placa); if((!r.operacao||r.operacao==='—') && semVeic && drvOp[norm(r.motoristaEscala)]) r.operacao=drvOp[norm(r.motoristaEscala)]; });
   RECORDS.sort((a,b)=> a.data<b.data?1:a.data>b.data?-1:(a.operacao.localeCompare(b.operacao)) );
 }
 
