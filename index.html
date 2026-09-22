@@ -1232,8 +1232,8 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
   const groups=Object.values(grp).sort((a,b)=> a.gkey<b.gkey?1:a.gkey>b.gkey?-1:a.nome.localeCompare(b.nome));
   const shown=groups.slice(0,cap); const ids=[]; const noun=mode==='fecha'?'períodos':(mode==='dia'?'dias':'semanas'); const zoomTxt=mode==='dia'?'dia → horas':(mode==='fecha'?'período → dia → horas':'semana → dia → horas');
   const html=shown.map((g,i)=>{
-    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,semSum=0,semN=0; const placas=new Set(), dias=new Set();
-    g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data);
+    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,semSum=0,semN=0; const placas=new Set(), dias=new Set(), ops=new Set();
+    g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data); if(r.operacao&&r.operacao!=='—')ops.add(r.operacao);
       for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
       const idDiv=r.idDivergente||r.condutorDivergente; const idWho=r.idDivergente?(r.trimbleMot||''):(r.condutorDivergente?r.condutorPlan:'');
@@ -1246,8 +1246,10 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
     });
     const identPct = semN? Math.round(semSum/semN) : null;
     ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, ident, t0:0, t1:g.total, total:g.total};
+    const opsArr=[...ops]; const opTxt=opsArr.join(', ')||'—';
     const meta=`<div class="meta">
       <div class="m"><span>${mode==='fecha'?'Fechamento':(mode==='dia'?'Dia':'Semana')}</span><b>${g.label}</b></div>
+      <div class="m"><span>Operação${opsArr.length>1?' ⚠':''}</span><b style="color:${opsArr.length>1?'var(--serious)':'inherit'}" title="${opsArr.length>1?'rodou em '+opsArr.length+' operações no período':''}">${opTxt}</b></div>
       <div class="m"><span>h ponto</span><b>${hpon?hDec(hpon):'—'}</b></div>
       <div class="m"><span>h condução</span><b style="color:${hcond>hpon+CFG.tol?'var(--serious)':'inherit'}">${hcond?hDec(hcond):'—'}</b></div>
       <div class="m"><span>Hora extra</span><b style="color:${hex>0?'var(--warning)':'inherit'}">${hex>0?hDec(hex):'—'}</b></div>
@@ -1556,6 +1558,15 @@ function renderFicha(){
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
   const P=fichaPontos(M);   // pontos críticos × positivos (mesma fonte do PDF)
   const PL=planoDeAcao(M);  // plano de ação concreto (o que fazer)
+  // este motorista rodou em outras operações fora do filtro atual? (evita o "só apareceu 1 dia")
+  const _opFilter=$('#fOp').value;
+  const allDrvRecs=RECORDS.filter(r=>r.motoristaEscala===nome);
+  const allOps=[...new Set(allDrvRecs.map(r=>r.operacao).filter(o=>o&&o!=='—'))];
+  const outrasOps = _opFilter ? allOps.filter(o=>o!==_opFilter) : [];
+  const diasOutras = _opFilter ? allDrvRecs.filter(r=>r.operacao&&r.operacao!=='—'&&r.operacao!==_opFilter).length : 0;
+  const noteOps = (_opFilter && outrasOps.length)
+    ? `<div class="card" style="margin-bottom:14px;padding:11px 14px;font-size:12.5px;border-left:3px solid var(--warning);background:color-mix(in srgb,var(--warning) 8%,var(--surface))">⚠ <b>Filtro de operação ativo (${_opFilter}).</b> Este motorista também rodou em <b>${outrasOps.join(', ')}</b> — ${diasOutras} dia(s) fora do filtro não aparecem aqui. <a href="#" id="fichaVerTodas" style="color:var(--gold-2);font-weight:600">Ver todos os dias →</a></div>`
+    : '';
 
   // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
   const tiposArr = alR.real ? Object.entries(alR.tipos||{}).sort((a,b)=>b[1]-a[1]) : [];
@@ -1578,6 +1589,7 @@ function renderFicha(){
         <div class="reco ${reco.cls}"><b>${reco.tit}</b>${reco.txt}</div>
       </div>
     </div>
+    ${noteOps}
 
     <div class="sec-title"><h2>Pontos críticos × positivos</h2><span>${periodoLabel()} · resumo executivo (o mesmo do PDF)</span></div>
     <div class="pontos">
@@ -1611,6 +1623,7 @@ function renderFicha(){
     <div class="grid">${ wk.html || '<div class="empty">Sem dias.</div>' }</div>
   `;
   wk.ids.forEach(setupZoom); wireZtlDrag();
+  const verTodas=$('#fichaVerTodas'); if(verTodas) verTodas.onclick=(ev)=>{ ev.preventDefault(); $('#fOp').value=''; renderAll(); };
 }
 
 /* ============================================================
