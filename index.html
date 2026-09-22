@@ -275,6 +275,17 @@
   /* ============ FICHA DO MOTORISTA (detalhamento) ============ */
   .ficha-back{display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 12px;cursor:pointer;font:inherit;font-size:13px}
   .ficha-back:hover{border-color:var(--gold)}
+  .ficha-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .ficha-actions .ficha-back{margin-bottom:0}
+  .btn-pdf{display:inline-flex;align-items:center;gap:6px;color:var(--navy);background:var(--gold);border:1px solid var(--gold-2);border-radius:9px;padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;font-weight:700}
+  .btn-pdf:hover{filter:brightness(1.05)}
+  .pontos{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px}
+  @media(max-width:720px){.pontos{grid-template-columns:1fr}}
+  .pontos-col{padding:14px 16px}
+  .pontos-col .pt-h{font-weight:700;font-size:13.5px;margin-bottom:8px}
+  .pontos-col.crit{border-left:3px solid var(--critical)} .pontos-col.crit .pt-h{color:var(--crit-ink)}
+  .pontos-col.pos{border-left:3px solid var(--good)} .pontos-col.pos .pt-h{color:var(--good-ink)}
+  .pontos-col ul{margin:0;padding-left:18px;font-size:13px;line-height:1.55} .pontos-col li{margin:4px 0}
   .ficha-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
   .ficha-hero .avatar{width:60px;height:60px;border-radius:14px;font-size:20px}
   .ficha-hero h2{font-size:20px}
@@ -329,7 +340,7 @@
     <div class="head-tools">
       <span class="pill" id="dataModePill"><span class="dot"></span> <b id="dataModeTxt">dados de demonstração</b></span>
       <button class="btn" id="themeBtn" title="Alternar tema">🌗 Tema</button>
-      <button class="btn" id="printBtn" title="Imprimir / PDF">🖨️ PDF</button>
+      <button class="btn" id="printBtn" title="Gerar relatório executivo do painel em PDF (respeita os filtros)">📄 Relatório PDF</button>
     </div>
   </div>
   <nav class="tabs" id="tabs">
@@ -392,7 +403,10 @@
 
   <!-- ===== FICHA DO MOTORISTA (detalhamento — abre ao clicar numa capinha) ===== -->
   <section class="view" id="view-ficha">
-    <button class="ficha-back" id="fichaBack">← Voltar ao resumo</button>
+    <div class="ficha-actions">
+      <button class="ficha-back" id="fichaBack">← Voltar ao resumo</button>
+      <button class="btn-pdf" id="fichaPdf" title="Gerar relatório visual em PDF para anexar no e-mail">📄 Exportar PDF do motorista</button>
+    </div>
     <div id="fichaBox"></div>
   </section>
 
@@ -1016,12 +1030,15 @@ function renderKpis(rows){
   const total=rows.length;
   const conf=rows.filter(r=>r.sev==='conforme').length;
   const div=rows.filter(r=>r.sev!=='conforme').length;
-  const dedo=rows.reduce((a,r)=>a+r.horasDedoDuro,0);
-  const motsDedo=new Set(rows.filter(r=>r.horasDedoDuro>0).map(r=>r.motoristaEscala)).size;
+  const dedo=rows.reduce((a,r)=>a+(r.ddReal||0),0);   // dedo duro REAL (fora da jornada com ponto)
+  const motsDedo=new Set(rows.filter(r=>(r.ddReal||0)>0).map(r=>r.motoristaEscala)).size;
   const hex=rows.reduce((a,r)=>a+(r.horaExtra||0),0);
   const motsHex=new Set(rows.filter(r=>r.horaExtra>0).map(r=>r.motoristaEscala)).size;
   const movSemPonto=rows.filter(r=>r.movimento.length>0 && r.punches.length===0).length;
   const pontoSemMov=rows.filter(r=>r.punches.length>0 && r.movimento.length===0).length;
+  // cobertura de ponto: dos dias com movimento, quantos têm ponto
+  const movDays=rows.filter(r=>r.movimento.length>0).length;
+  const cobPonto=movDays?Math.round((movDays-movSemPonto)/movDays*100):null;
   const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
   const medFrota=(function(){ if(ABAST){ let km=0,l=0; motSet.forEach(m=>{ const a=ABAST[norm(m)]; if(a){km+=a.km;l+=a.litros;} }); if(l>0) return km/l; }
     let km=0,l=0; rows.forEach(r=>{km+=r.km||0;l+=r.litros||0;}); if(l>0) return km/l;
@@ -1039,9 +1056,9 @@ function renderKpis(rows){
   const opSel = $('#fOp').value;
   const K=[
     {lab:'① Identificação'+(opSel?' — '+opSel:''),val:(identSel==null?'—':identSel+'<small>%</small>'),sub:(identSel==null?'sem dado de identificação':'aderência da câmera'+(opSel?' na operação':' (frota)')),ac:(identSel==null?'var(--muted)':(identSel>=CFG.sem?'var(--good)':'var(--critical)')),tab:'semid'},
-    {lab:'③ Horas Dedo Duro',val:hDec(dedo).replace('h','')+'<small>h</small>',sub:motsDedo+' motorista(s) c/ horas',ac:'var(--serious)',tab:'diverg'},
-    {lab:'Motoristas c/ dedo duro',val:motsDedo,sub:'horas não declaradas',ac:'var(--critical)',tab:'diverg'},
-    {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto',ac:'var(--critical)',tab:'diverg'},
+    {lab:'③ Dedo duro real',val:hDec(dedo).replace('h','')+'<small>h</small>',sub:motsDedo+' motorista(s) · fora da jornada c/ ponto',ac:'var(--serious)',tab:'diverg'},
+    {lab:'Cobertura de ponto',val:(cobPonto==null?'—':cobPonto+'<small>%</small>'),sub:'dias com movimento que têm ponto',ac:(cobPonto==null?'var(--muted)':(cobPonto>=90?'var(--good)':cobPonto>=70?'var(--warning)':'var(--critical)')),tab:'tabela'},
+    {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto (pendência)',ac:'var(--critical)',tab:'diverg'},
     {lab:'Ponto sem movimento',val:pontoSemMov,sub:'bateu ponto e não dirigiu',ac:'var(--warning)',tab:'tabela'},
     alertKpi
       ? {lab:'⚠ Alertas (câmera/telemetria)',val:alertKpi.tot.toLocaleString('pt-BR'),sub:(alertKpi.alto?alertKpi.alto+' motorista(s) c/ nível alto':alertKpi.nmot+' motorista(s) c/ alerta'),ac:'var(--s7)',tab:'linha'}
@@ -1091,9 +1108,9 @@ function semanaAgg(rows){
     Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaVeic(m.placa,op); m.alertas=d.alertas||{}; m.admissao=d.admissao;
       m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.ident=m.aderW?Math.round(m.aderSum/m.aderW):null;
       m.risco=riscoComposto(m, alertasResumo(m.nome, rng)); m.farolUlt=m.risco.cls; });
-    return { op, list:Object.values(mots).sort((a,b)=>{ const rk={vermelho:0,amarelo:1,verde:2}; return (rk[a.risco.cls]-rk[b.risco.cls]) || b.dd-a.dd; }),
-             dd:opRows.reduce((a,r)=>a+r.horasDedoDuro,0),
-             motsDedo:Object.values(mots).filter(m=>m.dd>0).length };
+    return { op, list:Object.values(mots).sort((a,b)=>{ const rk={vermelho:0,amarelo:1,verde:2}; return (rk[a.risco.cls]-rk[b.risco.cls]) || b.ddReal-a.ddReal; }),
+             dd:opRows.reduce((a,r)=>a+(r.ddReal||0),0),
+             motsDedo:Object.values(mots).filter(m=>m.ddReal>0).length };
   });
   return { weeks, ultima, data };
 }
@@ -1124,7 +1141,7 @@ function capinha(m,weeks){
     <div class="cap-metrics">
       <div class="cm"><span>Identif.</span><b class="${m.ident==null?'':(m.ident>=CFG.sem?'ok':'bad')}">${m.ident==null?'—':m.ident+'%'}</b></div>
       <div class="cm"><span>Média</span><b class="${medaOk?'ok':'bad'}">${medaTxt}</b></div>
-      <div class="cm"><span>Dedo duro</span><b class="${m.dd>0?'bad':''}">${m.dd>0?hDec(m.dd):'0h'}</b></div>
+      <div class="cm"><span>Dedo duro</span><b class="${m.ddReal>0?'bad':''}" title="fora da jornada (com ponto)">${m.ddReal>0?hDec(m.ddReal):'0h'}</b></div>
       <div class="cm"><span>Alertas</span><b class="${totAl>=5?'bad':''}">${totAl}</b></div>
     </div>
     <div class="cap-foot">
@@ -1413,9 +1430,16 @@ function recomendacao(anosMeses, media, totAl, dd){
     return {cls:'questionar',tit:'Perfil de risco — revisar permanência',txt:`Média ${media!=null?media.toFixed(2).replace('.',','):'—'} (< meta), ${totAl} alertas${(drv(fichaAtual).alertas.celular||0)>=5?' (uso alto de celular)':''}${dd>0?' e '+hDec(dd)+' de dedo duro':''}. Reunir com gestão.`};
   return {cls:'observar',tit:'Observar — manter plano de ação',txt:`Indicadores intermediários. Registrar causa-raiz e a ação da semana; comparar na próxima.`};
 }
-function renderFicha(){
-  const nome=fichaAtual; if(!nome){ $('#fichaBox').innerHTML=''; return; }
-  // respeita os filtros ativos (dia/operação/fechamento/data/situação) — os KPIs da ficha mudam conforme o filtro
+// rótulo amigável do período ativo (usado nos relatórios em PDF)
+function periodoLabel(){
+  const dia=$('#fDia').value; if(dia) return 'Dia '+brDate(dia);
+  const de=$('#fDe').value, ate=$('#fAte').value;
+  if(de||ate) return (de?brDate(de):'início')+' a '+(ate?brDate(ate):'hoje');
+  const fe=$('#fFecha').value; if(fe){ const s=$('#fFecha'); const t=s.options[s.selectedIndex]&&s.options[s.selectedIndex].text; return 'Fechamento '+(t||fe); }
+  return 'Todo o período carregado';
+}
+// métricas da ficha (fonte única — usada pela ficha na tela e pelo PDF)
+function fichaMetrics(nome){
   const _fe=$('#fFecha').value, _op=$('#fOp').value, _diaF=$('#fDia').value, _de=$('#fDe').value, _ate=$('#fAte').value, _stt=$('#fStatus').value;
   const recs=RECORDS.filter(r=>{ if(r.motoristaEscala!==nome) return false;
     if(_fe){ const f=fechamento(r.data); if(!f||f.key!==_fe) return false; }
@@ -1425,7 +1449,6 @@ function renderFicha(){
     if(_stt && r.sev!==_stt) return false;
     return true; });
   const d=drv(nome);
-  const {weeks}=semanaAgg(RECORDS);
   const porSemana={}; recs.forEach(r=>porSemana[r.semKey]=(porSemana[r.semKey]||0)+(r.ddReal||0));  // farol semanal = dedo duro real
   const ddTotal=recs.reduce((a,r)=>a+r.horasDedoDuro,0);
   const ddRealTotal=recs.reduce((a,r)=>a+(r.ddReal||0),0);
@@ -1435,8 +1458,6 @@ function renderFicha(){
   const semel=semArr.length?Math.round(semArr.reduce((a,b)=>a+b,0)/semArr.length):null;
   const op=[...new Set(recs.map(r=>r.operacao))].join(', ');
   const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
-  const _dayF=dayFilter(); const _recsEvid=_dayF?recs.filter(r=>r.data===_dayF):recs;
-  const wk=buildWeekCards(_recsEvid,'fztl',12,false,_dayF?'dia':'week');   // evidência (dia único se filtrado; senão semanal) com zoom
   const alR=alertasResumo(nome, activeRange()); const totAl=alR.total;
   const tempo=tempoDeCasa(d.admissao);
   const kmR=recs.reduce((a,r)=>a+(r.km||0),0), litrosR=recs.reduce((a,r)=>a+(r.litros||0),0);
@@ -1445,8 +1466,47 @@ function renderFicha(){
   const metaFicha = metaVeic(recs.length?(recs.find(r=>r.placa)||{}).placa:'', recs.length?recs[0].operacao:'');
   const medaOk=mediaR!=null&&mediaR>=metaFicha;
   const reco=recomendacao(tempo,mediaR,totAl,ddTotal);
-  const fichaRisco=riscoComposto({ident:semel, media:mediaR, meta:metaFicha, ddReal:ddRealTotal}, alR);
+  const risco=riscoComposto({ident:semel, media:mediaR, meta:metaFicha, ddReal:ddRealTotal}, alR);
+  const condDiv=recs.filter(r=>r.idDivergente||r.condutorDivergente).length;
+  const diasComMov=recs.filter(r=>r.primMov!=null).length;
+  return {nome,recs,d,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,op,placas,alR,totAl,tempo,kmR,litrosR,abF,mediaR,metaFicha,medaOk,reco,risco,condDiv,diasComMov};
+}
+// pontos críticos e positivos p/ o relatório executivo
+function fichaPontos(M){
+  const crit=[], pos=[], nf=v=>v==null?'—':v.toFixed(2).replace('.',',');
+  if(M.semel!=null){
+    if(M.semel<CFG.sem) crit.push(`Aderência facial baixa: <b>${M.semel}%</b> (meta ≥ ${CFG.sem}%) — câmera reconhecendo mal ou condutor não cadastrado.`);
+    else pos.push(`Boa aderência facial: <b>${M.semel}%</b> de semelhança média na câmera.`);
+  }
+  if(M.condDiv>0) crit.push(`Condutor reconhecido <b>incorreto</b> em ${M.condDiv} dia(s) — revisar cadastro/atribuição da viagem.`);
+  if(M.ddRealTotal>=120) crit.push(`Dedo duro real de <b>${hDec(M.ddRealTotal)}</b> — veículo em movimento fora da jornada do ponto.`);
+  else if(M.ddRealTotal>0) crit.push(`<b>${hDec(M.ddRealTotal)}</b> de movimento fora do ponto (dedo duro) — revisar.`);
+  else pos.push(`Sem dedo duro real: movimento do veículo compatível com o ponto.`);
+  const alto=(M.alR.niveis&&M.alR.niveis.ALTO)||0;
+  if(alto>0) crit.push(`<b>${alto}</b> alerta(s) de severidade ALTA na câmera no período.`);
+  if(M.totAl<=2 && M.alR.real) pos.push(`Poucos alertas no período (${M.totAl}).`);
+  if(M.mediaR!=null){
+    if(!M.medaOk) crit.push(`Média <b>${nf(M.mediaR)}</b> km/l abaixo da meta (${nf(M.metaFicha)}).`);
+    else pos.push(`Média <b>${nf(M.mediaR)}</b> km/l dentro da meta (${nf(M.metaFicha)}).`);
+  }
+  if(M.hexTotal>0) crit.push(`Horas extras: <b>${hDec(M.hexTotal)}</b> em ${M.diasHex} dia(s) acima de 7h20 de jornada.`);
+  else pos.push(`Sem horas extras acima da jornada.`);
+  const anos=/(\d+)\s*ano/.test(M.tempo)?+RegExp.$1:0;
+  if(anos>=2) pos.push(`<b>${M.tempo}</b> de casa — histórico consolidado.`);
+  if(!crit.length) crit.push('Nenhum ponto crítico identificado no período. ✔️');
+  if(!pos.length) pos.push('Sem destaques positivos relevantes no período.');
+  return {crit,pos};
+}
+function renderFicha(){
+  const nome=fichaAtual; if(!nome){ $('#fichaBox').innerHTML=''; return; }
+  const M=fichaMetrics(nome);
+  const {recs,d,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,op,placas,alR,totAl,tempo,litrosR,abF,mediaR,metaFicha,medaOk,reco}=M;
+  const fichaRisco=M.risco;
+  const {weeks}=semanaAgg(RECORDS);
+  const _dayF=dayFilter(); const _recsEvid=_dayF?recs.filter(r=>r.data===_dayF):recs;
+  const wk=buildWeekCards(_recsEvid,'fztl',12,false,_dayF?'dia':'week');   // evidência (dia único se filtrado; senão semanal) com zoom
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
+  const P=fichaPontos(M);   // pontos críticos × positivos (mesma fonte do PDF)
 
   // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
   const tiposArr = alR.real ? Object.entries(alR.tipos||{}).sort((a,b)=>b[1]-a[1]) : [];
@@ -1470,13 +1530,19 @@ function renderFicha(){
       </div>
     </div>
 
+    <div class="sec-title"><h2>Pontos críticos × positivos</h2><span>${periodoLabel()} · resumo executivo (o mesmo do PDF)</span></div>
+    <div class="pontos">
+      <div class="card pontos-col crit"><div class="pt-h">⚠️ Pontos críticos</div><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
+      <div class="card pontos-col pos"><div class="pt-h">✅ Pontos positivos</div><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
+    </div>
+
     <div class="grid kpis" style="margin-bottom:6px">
       <div class="card kpi"><div class="accent" style="background:${medaOk?'var(--good)':'var(--critical)'}"></div>
         <div class="lab">④ Média realizada</div><div class="val tnum">${mediaR!=null?mediaR.toFixed(2).replace('.',','):'—'}</div><div class="sub">${abF?'real (bomba)':(litrosR>0?'estim. Trimble':'—')} · meta ${metaFicha.toFixed(2).replace('.',',')}${mediaR!=null?(medaOk?' ✓':' ✗'):''}</div></div>
       <div class="card kpi"><div class="accent" style="background:var(--s5)"></div>
         <div class="lab">① Aderência facial</div><div class="val tnum">${semel==null?'—':semel+'<small>%</small>'}</div><div class="sub">semelhança média (câmera)</div></div>
       <div class="card kpi"><div class="accent" style="background:var(--serious)"></div>
-        <div class="lab">③ Dedo duro (total)</div><div class="val tnum">${hDec(ddTotal).replace('h','')}<small>h</small></div><div class="sub">movimento fora do ponto</div></div>
+        <div class="lab">③ Dedo duro real</div><div class="val tnum">${hDec(ddRealTotal).replace('h','')}<small>h</small></div><div class="sub">fora da jornada (com ponto)${ddTotal-ddRealTotal>60?' · +'+hDec(ddTotal-ddRealTotal)+' sem ponto':''}</div></div>
       <div class="card kpi"><div class="accent" style="background:${hexTotal>0?'var(--warning)':'var(--muted)'}"></div>
         <div class="lab">Hora extra (&gt;7h20)</div><div class="val tnum">${hDec(hexTotal).replace('h','')}<small>h</small></div><div class="sub">${diasHex} dia(s) acima da jornada</div></div>
       <div class="card kpi"><div class="accent" style="background:${(alR.niveis&&alR.niveis.ALTO)?'var(--critical)':(totAl>0?'var(--warning)':'var(--muted)')}"></div>
@@ -1493,6 +1559,158 @@ function renderFicha(){
     <div class="grid">${ wk.html || '<div class="empty">Sem dias.</div>' }</div>
   `;
   wk.ids.forEach(setupZoom); wireZtlDrag();
+}
+
+/* ============================================================
+   EXPORTAR PDF — relatório visual (motorista e painel) p/ e-mail
+   ============================================================ */
+const PDF_COR={verde:'#10b981',amarelo:'#f59e0b',vermelho:'#ef4444'};
+const PDF_LAB={verde:'OK',amarelo:'Atenção',vermelho:'Crítico'};
+function pdfEsc(s){ return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function pdfKpi(lab,val,sub,cor){ return `<div class="k"><div class="kbar" style="background:${cor}"></div><div class="klab">${lab}</div><div class="kval">${val}</div><div class="ksub">${sub||''}</div></div>`; }
+function pdfShell(titulo, sub, badge, corpo){
+  const now=new Date().toLocaleString('pt-BR');
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${pdfEsc(titulo)}</title>
+<style>
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:A4;margin:12mm}
+  body{margin:0;font:13px/1.5 "Segoe UI",Arial,sans-serif;color:#0f172a;background:#fff}
+  .wrap{max-width:800px;margin:0 auto}
+  .hd{display:flex;align-items:center;gap:14px;background:linear-gradient(120deg,#111827,#1c2740);color:#fff;border-radius:12px;padding:16px 20px}
+  .hd img{height:40px}
+  .hd .t h1{margin:0;font-size:18px;letter-spacing:.2px}
+  .hd .t .s{font-size:12px;opacity:.85;margin-top:2px}
+  .hd .badge{margin-left:auto;text-align:right;font-size:11px;opacity:.9}
+  .hd .badge .rb{display:inline-block;margin-top:4px;padding:4px 12px;border-radius:20px;font-weight:800;font-size:12px;color:#111827}
+  .strip{height:4px;background:#f5c800;border-radius:2px;margin:10px 0 16px}
+  .kgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+  .kgrid.p6{grid-template-columns:repeat(3,1fr)}
+  .k{border:1px solid #e5e7eb;border-radius:10px;padding:11px 12px 12px;overflow:hidden;position:relative;background:#fff}
+  .kbar{position:absolute;top:0;left:0;right:0;height:3px}
+  .klab{font-size:10.5px;color:#64748b;text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  .kval{font-size:22px;font-weight:800;margin:2px 0}
+  .kval small{font-size:12px;font-weight:700;color:#64748b}
+  .ksub{font-size:10.5px;color:#64748b}
+  h2.sec{font-size:14px;margin:18px 0 8px;padding-bottom:5px;border-bottom:2px solid #f5c800;display:inline-block}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .col{border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px}
+  .col.crit{border-left:4px solid #ef4444} .col.pos{border-left:4px solid #10b981}
+  .col h3{margin:0 0 8px;font-size:13px} .col.crit h3{color:#dc2626} .col.pos h3{color:#059669}
+  .col ul{margin:0;padding-left:18px} .col li{margin:5px 0;font-size:12px;line-height:1.45}
+  .reco{border:1px solid #e5e7eb;border-left:4px solid #f5c800;border-radius:10px;padding:12px 14px;margin-top:14px;background:#fffdf3;font-size:12.5px}
+  .reco b{display:block;margin-bottom:3px}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid #eef2f7}
+  th{background:#f8fafc;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:#475569}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .ft{margin-top:22px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:10.5px;color:#94a3b8;display:flex;justify-content:space-between}
+  .noprint{position:fixed;top:10px;right:10px}
+  .noprint button{font:inherit;font-size:13px;font-weight:700;background:#f5c800;color:#111827;border:1px solid #e68a00;border-radius:8px;padding:8px 14px;cursor:pointer}
+  @media print{.noprint{display:none}}
+</style></head><body><div class="wrap">
+  <div class="noprint"><button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div>
+  <div class="hd">
+    <img src="${LOGO_MARONI}" alt="Grupo Maroni">
+    <div class="t"><h1>${pdfEsc(titulo)}</h1><div class="s">${pdfEsc(sub)}</div></div>
+    ${badge?`<div class="badge">Situação${badge.extra?' · '+pdfEsc(badge.extra):''}<br><span class="rb" style="background:${badge.cor}">${pdfEsc(badge.txt)}</span></div>`:''}
+  </div>
+  <div class="strip"></div>
+  ${corpo}
+  <div class="ft"><span>Projeto Dedo Duro · Grupo Maroni · Ponto × Movimentação × Trimble</span><span>Gerado em ${now}</span></div>
+</div>
+<script>window.onload=function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},400);};<\/script>
+</body></html>`;
+}
+function pdfOpen(html){
+  const w=window.open('','_blank');
+  if(!w){ toast('Permita pop-ups para gerar o PDF'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+function exportFichaPDF(){
+  const nome=fichaAtual; if(!nome){ toast('Abra a ficha de um motorista primeiro'); return; }
+  const M=fichaMetrics(nome), P=fichaPontos(M);
+  const nf=v=>v==null?'—':v.toFixed(2).replace('.',',');
+  const alto=(M.alR.niveis&&M.alR.niveis.ALTO)||0;
+  const kpis=`<div class="kgrid">
+    ${pdfKpi('④ Média realizada', (M.mediaR==null?'—':nf(M.mediaR)), 'meta '+nf(M.metaFicha)+(M.mediaR!=null?(M.medaOk?' ✓':' ✗'):''), M.medaOk?'#10b981':'#ef4444')}
+    ${pdfKpi('① Aderência facial', (M.semel==null?'—':M.semel+'<small>%</small>'), 'semelhança média (câmera)', M.semel==null?'#94a3b8':(M.semel>=CFG.sem?'#10b981':'#ef4444'))}
+    ${pdfKpi('③ Dedo duro real', hDec(M.ddRealTotal).replace('h','')+'<small>h</small>', 'fora da jornada c/ ponto', M.ddRealTotal>=120?'#ef4444':(M.ddRealTotal>0?'#f59e0b':'#10b981'))}
+    ${pdfKpi('Hora extra (&gt;7h20)', hDec(M.hexTotal).replace('h','')+'<small>h</small>', M.diasHex+' dia(s) acima', M.hexTotal>0?'#f59e0b':'#94a3b8')}
+    ${pdfKpi('Alertas (total)', M.totAl.toLocaleString('pt-BR'), (alto?alto+' de nível alto':(M.alR.real?'no período':'câmera Trimble')), alto?'#ef4444':(M.totAl>0?'#f59e0b':'#94a3b8'))}
+  </div>`;
+  const pontos=`<div class="cols">
+    <div class="col crit"><h3>⚠️ Pontos críticos</h3><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
+    <div class="col pos"><h3>✅ Pontos positivos</h3><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
+  </div>`;
+  const reco=`<div class="reco"><b>Recomendação: ${pdfEsc(M.reco.tit)}</b>${pdfEsc(M.reco.txt)}</div>`;
+  const sub=`${M.op||'—'}${M.placas?' · '+M.placas:''} · ${M.tempo} de casa · ${periodoLabel()}`;
+  const corpo=kpis+'<h2 class="sec">Pontos críticos × positivos</h2>'+pontos+reco;
+  pdfOpen(pdfShell('Dedo Duro — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
+}
+function exportPainelPDF(){
+  const rows=filtered();
+  if(!rows.length){ toast('Sem registros no filtro atual'); return; }
+  // agregados (mesma base dos KPIs)
+  const dedo=rows.reduce((a,r)=>a+(r.ddReal||0),0);
+  const motsDedo=new Set(rows.filter(r=>(r.ddReal||0)>0).map(r=>r.motoristaEscala)).size;
+  const hex=rows.reduce((a,r)=>a+(r.horaExtra||0),0);
+  const movSemPonto=rows.filter(r=>r.movimento.length>0 && r.punches.length===0).length;
+  const pontoSemMov=rows.filter(r=>r.punches.length>0 && r.movimento.length===0).length;
+  const movDays=rows.filter(r=>r.movimento.length>0).length;
+  const cobPonto=movDays?Math.round((movDays-movSemPonto)/movDays*100):null;
+  const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
+  let idW=0,idT=0; rows.forEach(r=>{ const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); idW+=v*w; idT+=w; } });
+  const identSel=idT>0?Math.round(idW/idT):null;
+  let alertTot=0,alertAlto=0; if(ALERTS||BOL){ const rng=activeRange(); motSet.forEach(m=>{ const a=alertasResumo(m,rng); if(a&&a.total){ alertTot+=a.total; if(a.niveis&&a.niveis.ALTO)alertAlto++; } }); }
+  // placas OK × ação
+  let placOk=null,placAcao=null,placZero=null;
+  if(typeof PLACA_MOV!=='undefined' && PLACA_MOV){ const opF=$('#fOp').value; placOk=0;placAcao=0;placZero=0;
+    for(const pk in PLACA_MOV){ const g=PLACA_MOV[pk]; if(!g.tot) continue; if(opF && operacaoDaPlaca(pk)!==opF) continue;
+      const ader=g.idn/g.tot*100; if(g.idn===0){placAcao++;placZero++;} else if(ader<CFG.sem){placAcao++;} else placOk++; } }
+  // farol dos motoristas + top críticos
+  const {data}=semanaAgg(rows);
+  const allMots=[]; data.forEach(g=>g.list.forEach(m=>allMots.push(m)));
+  const cnt={verde:0,amarelo:0,vermelho:0}; allMots.forEach(m=>cnt[m.risco.cls]=(cnt[m.risco.cls]||0)+1);
+  const criticos=allMots.filter(m=>m.risco.cls==='vermelho').sort((a,b)=>b.ddReal-a.ddReal).slice(0,12);
+  // aderência por operação
+  const opAder=data.map(g=>{ let w=0,t=0; g.list.forEach(m=>{ if(m.ident!=null){ w+=m.ident; t++; } }); return {op:g.op, ader:t?Math.round(w/t):null, mots:g.list.length, dd:g.dd}; }).sort((a,b)=>(a.ader==null?999:a.ader)-(b.ader==null?999:b.ader));
+
+  const opSel=$('#fOp').value;
+  let kg=`<div class="kgrid p6">
+    ${pdfKpi('① Identificação'+(opSel?' · '+pdfEsc(opSel):''), (identSel==null?'—':identSel+'<small>%</small>'), 'aderência da câmera', identSel==null?'#94a3b8':(identSel>=CFG.sem?'#10b981':'#ef4444'))}
+    ${pdfKpi('③ Dedo duro real', hDec(dedo).replace('h','')+'<small>h</small>', motsDedo+' motorista(s)', '#f97316')}
+    ${pdfKpi('Cobertura de ponto', (cobPonto==null?'—':cobPonto+'<small>%</small>'), 'dias c/ mov. que têm ponto', cobPonto==null?'#94a3b8':(cobPonto>=90?'#10b981':cobPonto>=70?'#f59e0b':'#ef4444'))}
+    ${pdfKpi('Movimento sem ponto', movSemPonto, 'dirigiu e não bateu ponto', '#ef4444')}
+    ${pdfKpi('Ponto sem movimento', pontoSemMov, 'bateu ponto e não dirigiu', '#f59e0b')}
+    ${ (ALERTS||BOL) ? pdfKpi('⚠ Alertas', alertTot.toLocaleString('pt-BR'), (alertAlto?alertAlto+' motorista(s) nível alto':'no período'), '#ef4444') : pdfKpi('Horas extras', hDec(hex).replace('h','')+'<small>h</small>', 'acima de 7h20', hex>0?'#f59e0b':'#94a3b8') }
+  </div>`;
+  if(placOk!=null){ kg+=`<div class="kgrid p6" style="grid-template-columns:repeat(3,1fr)">
+    ${pdfKpi('Placas OK (câmera)', placOk, 'identificando no mínimo', '#10b981')}
+    ${pdfKpi('Placas p/ ação', placAcao, (placZero?placZero+' sem NENHUMA ID · ':'')+'equipamento/sistêmico', placAcao?'#ef4444':'#10b981')}
+    ${pdfKpi('Horas extras', hDec(hex).replace('h','')+'<small>h</small>', 'acima de 7h20', hex>0?'#f59e0b':'#94a3b8')}
+  </div>`; }
+
+  const farol=`<h2 class="sec">Farol de risco — motoristas</h2>
+    <div class="cols" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="col pos"><h3><span class="dot" style="background:#10b981"></span>${cnt.verde} OK</h3><div style="font-size:12px;color:#64748b">sem sinais de risco</div></div>
+      <div class="col" style="border-left:4px solid #f59e0b"><h3 style="color:#b45309"><span class="dot" style="background:#f59e0b"></span>${cnt.amarelo} Atenção</h3><div style="font-size:12px;color:#64748b">1 sinal</div></div>
+      <div class="col crit"><h3><span class="dot" style="background:#ef4444"></span>${cnt.vermelho} Crítico</h3><div style="font-size:12px;color:#64748b">2+ sinais (ou 1 grave)</div></div>
+    </div>`;
+
+  const critTab = criticos.length ? `<h2 class="sec">Motoristas críticos — priorizar</h2>
+    <table><thead><tr><th>Motorista</th><th>Operação</th><th>Ident.</th><th>Dedo duro</th><th>Sinais</th></tr></thead><tbody>
+    ${criticos.map(m=>`<tr><td><span class="dot" style="background:${PDF_COR[m.risco.cls]}"></span>${pdfEsc(firstName(m.nome))}</td><td>${pdfEsc(m.op)}</td><td>${m.ident==null?'—':m.ident+'%'}</td><td>${hDec(m.ddReal)}</td><td style="font-size:11px;color:#475569">${pdfEsc(m.risco.reasons.join(' · ')||'—')}</td></tr>`).join('')}
+    </tbody></table>` : '<h2 class="sec">Motoristas críticos</h2><div style="font-size:12.5px;color:#059669">Nenhum motorista em situação crítica no filtro atual. ✔️</div>';
+
+  const opTab = opAder.length ? `<h2 class="sec">Aderência por operação</h2>
+    <table><thead><tr><th>Operação</th><th>Aderência</th><th>Motoristas</th><th>Dedo duro</th></tr></thead><tbody>
+    ${opAder.map(o=>`<tr><td><span class="dot" style="background:${o.ader==null?'#94a3b8':(o.ader>=CFG.sem?'#10b981':o.ader>=CFG.farolAmareloMax?'#f59e0b':'#ef4444')}"></span>${pdfEsc(o.op)}</td><td><b>${o.ader==null?'—':o.ader+'%'}</b></td><td>${o.mots}</td><td>${hDec(o.dd)}</td></tr>`).join('')}
+    </tbody></table>` : '';
+
+  const sub=`${periodoLabel()}${opSel?' · Operação: '+opSel:''} · ${motSet.length} motorista(s) · ${rows.length} registro(s)`;
+  const corpo=kg+farol+critTab+opTab;
+  const critCls = cnt.vermelho>0?'vermelho':(cnt.amarelo>0?'amarelo':'verde');
+  pdfOpen(pdfShell('Dedo Duro — Painel Executivo', sub, {txt:PDF_LAB[critCls], cor:PDF_COR[critCls], extra:cnt.vermelho+' crítico(s)'}, corpo));
 }
 
 /* ============================================================
@@ -1623,6 +1841,15 @@ function exportSaude(){
   SAUDE_ROWS.forEach(r=>lines.push([r.placa,r.op,'"'+r.func+'"','"'+r.idStatus+'"',r.dias,(r.ader==null?'':r.ader),'"'+r.acao+'"'].join(';')));
   baixarCsv(lines,'saude_cameras.csv');
 }
+// diagnóstico: o relatório de movimentação traz o movimento SEM identificação? (senão a aderência fica ~100%)
+function identCoverageWarning(){
+  if(!REAL) return '';
+  if(!RECORDS.some(r=>r.movimento&&r.movimento.length)) return '';
+  if(MOV_UNSEG_STORE && Object.keys(MOV_UNSEG_STORE).length>0) return '';
+  const bolSemMot = BOL && Object.values(BOL).some(a=>a.tipos && a.tipos['Sem Motorista']);
+  return '<div class="card" style="grid-column:1/-1;margin-bottom:12px;padding:11px 14px;font-size:12.5px;border-color:color-mix(in srgb,var(--warning) 50%,var(--border))">'+
+    '<b style="color:var(--serious)">⚠ Verificar o export:</b> a movimentação carregada <b>não traz trechos de movimento SEM identificação</b> — a aderência tende a aparecer ~100% (superestimada). Para medir de verdade, peça o relatório de movimentação <b>com as linhas de Movimento mesmo sem motorista</b>'+(bolSemMot?' · alternativa: usar o <b>“Sem Motorista”</b> do Boletim (já carregado)':'')+'.</div>';
+}
 function renderAderencia(rows){
   const box=$('#aderBox'), kbox=$('#aderKpis'); if(!box) return;
   const ops={};
@@ -1642,7 +1869,7 @@ function renderAderencia(rows){
   ];
   if(kbox) kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
   if(!list.length){ box.innerHTML='<div class="empty">Sem dados de identificação no filtro atual. Carregue o relatório de <b>Alertas</b> (UO da Trimble) e a <b>Movimentação</b>.</div>'; return; }
-  box.innerHTML=list.map(g=>{ const cor=g.ident==null?'var(--muted)':(g.ident>=CFG.sem?'var(--good)':(g.ident>=CFG.sem*0.75?'var(--warning)':'var(--critical)'));
+  box.innerHTML=identCoverageWarning()+list.map(g=>{ const cor=g.ident==null?'var(--muted)':(g.ident>=CFG.sem?'var(--good)':(g.ident>=CFG.sem*0.75?'var(--warning)':'var(--critical)'));
     return `<button class="capinha adercard" data-op="${encodeURIComponent(g.op)}">
       <div class="cap-id" style="margin-bottom:4px"><b>${g.op}</b><small>${g.motN} motorista(s) · ${g.placN} veículo(s)</small></div>
       <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:32px;font-weight:760;letter-spacing:-.02em;color:${cor}">${g.ident==null?'—':g.ident+'%'}</span><span style="font-size:11px;color:var(--muted)">aderência</span></div>
@@ -1681,7 +1908,7 @@ function renderPlacasSemId(){
   kbox.innerHTML=K.map(k=>`<div class="card kpi"><div class="accent" style="background:${k.ac}"></div><div class="lab">${k.lab}</div><div class="val tnum">${k.val}</div><div class="sub">${k.sub}</div></div>`).join('');
   if(!rows.length){ box.innerHTML='<div class="empty">🎉 '+(opF?'Nenhuma placa da operação <b>'+opF+'</b> ':'Todas as placas que se moveram tiveram condutor identificado dentro do mínimo.')+(opF?'para ação — tudo identificado dentro do mínimo.':'')+'</div>'; return; }
   const chip={critico:'<span class="chip critico">Sem ID</span>',atencao:'<span class="chip atencao">ID baixa</span>'};
-  box.innerHTML=(opF?'<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)">Filtrado por operação <b>'+opF+'</b> · '+rows.length+' placa(s) p/ ação · clique numa placa para ver a linha do tempo dela</div>':'')+
+  box.innerHTML=identCoverageWarning()+(opF?'<div class="card" style="margin-bottom:12px;padding:10px 14px;font-size:12.5px;color:var(--ink-2)">Filtrado por operação <b>'+opF+'</b> · '+rows.length+' placa(s) p/ ação · clique numa placa para ver a linha do tempo dela</div>':'')+
     '<div class="tblwrap"><table style="min-width:860px"><thead><tr><th>Placa</th><th>Operação</th><th>Dias moveu</th><th>Dias c/ ID</th><th>Aderência</th><th>Câmera (saúde)</th><th>Últ. mov.</th><th>Situação</th><th></th></tr></thead><tbody>'+
     rows.map(r=>`<tr class="semidrow" data-placa="${r.placa}" title="ver a linha do tempo desta placa" style="cursor:pointer"><td class="tnum">${r.placa}</td><td>${r.op}</td><td class="tnum">${r.dias}</td><td class="tnum">${r.diasId}</td>
       <td class="tnum" style="color:${r.ader===0?'var(--crit-ink)':(r.ader<CFG.sem?'var(--serious)':'inherit')}">${r.ader==null?'—':r.ader+'%'}</td>
@@ -2320,7 +2547,8 @@ $('#fichaBack').onclick=voltarResumo;
 function applyTheme(t){ document.documentElement.setAttribute('data-theme',t); try{localStorage.setItem(LS.theme,t);}catch(e){} }
 $('#themeBtn').onclick=()=>applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
 (function(){ let t='light'; try{t=localStorage.getItem(LS.theme)||'light';}catch(e){} if(t==='dark')applyTheme('dark'); })();
-$('#printBtn').onclick=()=>window.print();
+$('#printBtn').onclick=exportPainelPDF;
+$('#fichaPdf').onclick=exportFichaPDF;
 // filtros
 ['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus'].forEach(s=>$(s).addEventListener('change',renderAll));
 $('#fBusca').addEventListener('input',renderAll);
