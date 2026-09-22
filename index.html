@@ -1540,7 +1540,7 @@ function renderTable(rows){
     const veic=(r.placas&&r.placas.length)? (r.placas.length>1? r.placas.length+' veíc.' : r.placas[0]) : (r.placa||'—');
     const ddCell = r.horasDedoDuro>0?`<span class="badcell">${hm(r.horasDedoDuro)}</span>`:'—';
     const hexCell = r.horaExtra>0?`<span class="badcell" style="background:var(--warning-bg,rgba(245,158,11,.15));color:var(--warning)">${hm(r.horaExtra)}</span>`:'—';
-    return `<tr>
+    return `<tr class="tblrow" data-mot="${encodeURIComponent(r.motoristaEscala||'')}" data-dia="${r.data}" title="ver na linha do tempo" style="cursor:pointer">
       <td>${r.operacao}</td><td class="tnum">${brDate(r.data)}</td>
       <td>${r.motoristaEscala||'—'}</td>
       <td title="${(r.placas&&r.placas.join(', '))||''}">${veic}</td>
@@ -1711,7 +1711,7 @@ function renderBatimento(){
         const veic=r.tms?[r.tms.rodado,r.tms.carroceria,r.tms.prop,r.tms.uf].filter(Boolean).join(' · '):'';
         const centroCell = r.status==='sem_tms'?'<span class="pendcell">não encontrada no TMS</span>'
                          : (r.status==='divergente'?`<span class="badcell">${r.centro}</span>`:(r.centro||'—'));
-        return `<tr><td class="tnum">${r.placa}</td><td>${r.uo||'—'}</td><td>${centroCell}</td><td style="color:var(--muted);font-size:11.5px">${veic||'—'}</td><td>${chip[r.status]}</td></tr>`;
+        return `<tr class="oprow" data-placa="${r.placa}" title="ver a linha do tempo desta placa" style="cursor:pointer"><td class="tnum">${r.placa}</td><td>${r.uo||'—'}</td><td>${centroCell}</td><td style="color:var(--muted);font-size:11.5px">${veic||'—'}</td><td>${chip[r.status]}</td></tr>`;
       }).join('')
     }</tbody></table></div>`;
 }
@@ -1768,7 +1768,7 @@ function renderMedia(rows){
   box.innerHTML=`<div class="tblwrap"><table style="min-width:820px"><thead><tr>
       <th>Motorista</th><th>Operação</th><th>Meta</th><th>Trimble (est.)</th><th>Abastec. (real)</th><th>Δ bomba×telem.</th><th>Custo R$</th><th>Farol</th></tr></thead><tbody>${
       list.map(m=>{ const of=m.oficial; const cor=of>=m.meta?'var(--good-ink)':'var(--crit-ink)';
-        return `<tr><td>${m.nome}</td><td>${m.op||'—'}</td>
+        return `<tr class="mediarow" data-mot="${encodeURIComponent(m.nome)}" title="ver ficha do motorista" style="cursor:pointer"><td>${m.nome}</td><td>${m.op||'—'}</td>
           <td class="tnum" title="meta por operação">${nf(m.meta)}</td>
           <td class="tnum" style="color:var(--muted)">${nf(m.mediaT)}</td>
           <td class="tnum" style="font-weight:650;color:${m.mediaA!=null?cor:'var(--muted)'}">${m.mediaA!=null?nf(m.mediaA):'—'}</td>
@@ -2303,10 +2303,16 @@ function focusRecord(mot, dia){ ['#fFecha','#fOp','#fStatus'].forEach(s=>$(s).va
 $('#divList').addEventListener('click',e=>{ const c=e.target.closest('.divcard'); if(!c)return; focusRecord(decodeURIComponent(c.dataset.mot), c.dataset.dia); });
 // clicar numa operação na aba Aderência → Resumo dessa operação
 $('#aderBox').addEventListener('click',e=>{ const c=e.target.closest('.adercard'); if(!c)return; $('#fOp').value=decodeURIComponent(c.dataset.op); renderAll(); goTab('semana'); });
-// clicar numa placa em "Placas sem ID" → Linha do tempo daquela placa
-$('#semidBox').addEventListener('click',e=>{ const tr=e.target.closest('.semidrow'); if(!tr)return; $('#fBusca').value=tr.dataset.placa; $('#fDia').value=''; $('#fDe').value=''; $('#fAte').value=''; renderAll(); goTab('linha'); });
-// clicar numa placa na Saúde das câmeras → Linha do tempo daquela placa
-$('#saudeBox').addEventListener('click',e=>{ const tr=e.target.closest('.sauderow'); if(!tr)return; $('#fBusca').value=tr.dataset.placa; $('#fDia').value=''; $('#fDe').value=''; $('#fAte').value=''; renderAll(); goTab('linha'); });
+// helper: focar uma placa na Linha do tempo (modo placa)
+function focusPlaca(placa){ $('#fBusca').value=placa; $('#fDia').value=''; $('#fDe').value=''; $('#fAte').value=''; renderAll(); goTab('linha'); }
+// clicar numa placa em "Placas sem ID" / Saúde / Operação por placa → Linha do tempo daquela placa
+$('#semidBox').addEventListener('click',e=>{ const tr=e.target.closest('.semidrow'); if(tr) focusPlaca(tr.dataset.placa); });
+$('#saudeBox').addEventListener('click',e=>{ const tr=e.target.closest('.sauderow'); if(tr) focusPlaca(tr.dataset.placa); });
+$('#opBox').addEventListener('click',e=>{ const tr=e.target.closest('.oprow'); if(tr) focusPlaca(tr.dataset.placa); });
+// clicar numa linha do Consolidado → Linha do tempo daquele motorista+dia
+$('#tblBody').addEventListener('click',e=>{ const tr=e.target.closest('.tblrow'); if(tr) focusRecord(decodeURIComponent(tr.dataset.mot||''), tr.dataset.dia); });
+// clicar numa linha da Média → ficha do motorista
+$('#mediaBox').addEventListener('click',e=>{ const tr=e.target.closest('.mediarow'); if(tr) openFicha(decodeURIComponent(tr.dataset.mot||'')); });
 // capinha do motorista → detalhamento (ficha)
 $('#semanaBox').addEventListener('click',e=>{ const c=e.target.closest('.capinha'); if(!c)return; openFicha(decodeURIComponent(c.dataset.mot)); });
 $('#fichaBack').onclick=voltarResumo;
