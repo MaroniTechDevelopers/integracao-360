@@ -1080,8 +1080,7 @@ function renderKpis(rows){
   let alertKpi=null;
   if(ALERTS||BOL){ const rng=activeRange(); let tot=0,alto=0,nmot=0; motSet.forEach(m=>{ const a=alertasResumo(m, rng); if(a&&a.total){ tot+=a.total; nmot++; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto,nmot}; }
   // ① Identificação (aderência da câmera) da seleção atual — ponderada pelas horas de condução
-  let idW=0, idT=0; rows.forEach(r=>{ const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); idW+=v*w; idT+=w; } });
-  const identSel = idT>0? Math.round(idW/idT) : null;
+  const identSel = aderRecs(rows);   // aderência ponderada pelo tempo (min identificados ÷ min total)
   // Placas OK × placas p/ ação (equipamento) — pela identificação (PLACA_MOV); respeita o filtro de operação
   let placOk=null, placAcao=null, placZero=null;
   if(typeof PLACA_MOV!=='undefined' && PLACA_MOV){ const opF=$('#fOp').value; placOk=0; placAcao=0; placZero=0;
@@ -1132,15 +1131,15 @@ function semanaAgg(rows){
   const data=ops.map(op=>{
     const opRows=rows.filter(r=>r.operacao===op);
     const mots={};
-    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,placa:'',dd:0,ddReal:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,aderSum:0,aderW:0,idDiv:0,pend:0});
+    opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,placa:'',dd:0,ddReal:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,recs:[],idDiv:0,pend:0});
       m.dd+=r.horasDedoDuro; m.ddReal+=(r.ddReal||0); if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0; if(r.placa)m.placa=r.placa;
       m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+(r.ddReal||0);   // farol semanal = dedo duro REAL (fora da jornada com ponto)
       if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; }
-      { const idv=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(idv!=null){ const w=(r.horasMov||1); m.aderSum+=idv*w; m.aderW+=w; } }
+      m.recs.push(r);
       if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
     const rng=activeRange();
     Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaVeic(m.placa,op); m.alertas=d.alertas||{}; m.admissao=d.admissao;
-      m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.ident=m.aderW?Math.round(m.aderSum/m.aderW):null;
+      m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.ident=aderRecs(m.recs);   // ponderado pelo tempo (min identificados ÷ total)
       m.risco=riscoComposto(m, alertasResumo(m.nome, rng)); m.farolUlt=m.risco.cls; });
     return { op, list:Object.values(mots).sort((a,b)=>{ const rk={vermelho:0,amarelo:1,verde:2}; return (rk[a.risco.cls]-rk[b.risco.cls]) || b.ddReal-a.ddReal; }),
              dd:opRows.reduce((a,r)=>a+(r.ddReal||0),0),
@@ -1232,7 +1231,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
   const groups=Object.values(grp).sort((a,b)=> a.gkey<b.gkey?1:a.gkey>b.gkey?-1:a.nome.localeCompare(b.nome));
   const shown=groups.slice(0,cap); const ids=[]; const noun=mode==='fecha'?'períodos':(mode==='dia'?'dias':'semanas'); const zoomTxt=mode==='dia'?'dia → horas':(mode==='fecha'?'período → dia → horas':'semana → dia → horas');
   const html=shown.map((g,i)=>{
-    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,semSum=0,semN=0; const placas=new Set(), dias=new Set(), ops=new Set();
+    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0; const placas=new Set(), dias=new Set(), ops=new Set();
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data); if(r.operacao&&r.operacao!=='—')ops.add(r.operacao);
       for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
@@ -1242,9 +1241,8 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       (r.almocoDrivenSegs||[]).forEach(s=>almoco.push({a:off+s.ini,b:off+s.fim}));
       alertsForRec(r).forEach(al=>{ alertas.push({t:off+al.t,niv:al.niv,tipo:al.tipo}); if(al.niv==='A')nAlto++; });
       dd+=r.horasDedoDuro||0; hpon+=r.horasPonto||0; hcond+=r.horasMov||0; hex+=r.horaExtra||0;
-      const idv=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(idv!=null){ semSum+=idv; semN++; }
     });
-    const identPct = semN? Math.round(semSum/semN) : null;
+    const identPct = aderRecs(g.recs);   // ponderado pelo tempo (reflete o vermelho da trilha)
     ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, ident, t0:0, t1:g.total, total:g.total};
     const opsArr=[...ops]; const opTxt=opsArr.join(', ')||'—';
     const meta=`<div class="meta">
@@ -1490,8 +1488,7 @@ function fichaMetrics(nome){
   const ddRealTotal=recs.reduce((a,r)=>a+(r.ddReal||0),0);
   const hexTotal=recs.reduce((a,r)=>a+(r.horaExtra||0),0);
   const diasHex=recs.filter(r=>r.horaExtra>0).length;
-  const semArr=recs.map(r=>r.aderencia!=null?r.aderencia:r.semelhanca).filter(v=>v!=null);
-  const semel=semArr.length?Math.round(semArr.reduce((a,b)=>a+b,0)/semArr.length):null;
+  const semel=aderRecs(recs);   // aderência ponderada pelo tempo (min identificados ÷ min total)
   const op=[...new Set(recs.map(r=>r.operacao))].join(', ');
   const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
   const alR=alertasResumo(nome, activeRange()); const totAl=alR.total;
@@ -1729,8 +1726,7 @@ function exportPainelPDF(){
   const movDays=rows.filter(r=>r.movimento.length>0).length;
   const cobPonto=movDays?Math.round((movDays-movSemPonto)/movDays*100):null;
   const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
-  let idW=0,idT=0; rows.forEach(r=>{ const v=(r.aderencia!=null)?r.aderencia:r.semelhanca; if(v!=null){ const w=(r.horasMov||1); idW+=v*w; idT+=w; } });
-  const identSel=idT>0?Math.round(idW/idT):null;
+  const identSel=aderRecs(rows);   // ponderado pelo tempo
   let alertTot=0,alertAlto=0; if(ALERTS||BOL){ const rng=activeRange(); motSet.forEach(m=>{ const a=alertasResumo(m,rng); if(a&&a.total){ alertTot+=a.total; if(a.niveis&&a.niveis.ALTO)alertAlto++; } }); }
   // placas OK × ação
   let placOk=null,placAcao=null,placZero=null;
@@ -1884,7 +1880,8 @@ function renderSaude(){
   const temRecs=RECORDS.length>0;
   const rk={critico:0,atencao:1,pendente:2,conforme:3};
   const rows=Object.keys(SAUDE).map(pk=>{ const s=SAUDE[pk]; const f=camFarol(s.func,s.status); const id=idBy[pk];
-    const dias=id?id.dias.size:0; const ader=id&&id.aderN?Math.round(id.aderSum/id.aderN):null;
+    const dias=id?id.dias.size:0;
+    const pm=(typeof PLACA_MOV!=='undefined'&&PLACA_MOV&&PLACA_MOV[pk]); const ader= pm&&pm.tot? Math.round(pm.idn/pm.tot*100) : (id&&id.aderN?Math.round(id.aderSum/id.aderN):null);   // ponderado (PLACA_MOV/BDV) > média
     const idStatus = !temRecs ? '— (sem movimentação carregada)' : (dias>0? ('identificando · '+dias+' dia'+(dias>1?'s':'')) : 'sem identificação no período');
     const idCls = !temRecs ? 'pend' : (dias>0?'ok':'bad');
     let acao, acaoCls;
@@ -2242,6 +2239,11 @@ let PLACA_MOV=null;
 // trechos de movimento SEM identificação, por placa|dia (mesclados, p/ desenhar no modo placa) — persistido em RAW.movUnseg
 let MOV_UNSEG_STORE=null;
 function aderDe(placas, data){ let tot=0,idn=0; (placas||[]).forEach(p=>{ const pk=placaKey(p)+'|'+data; tot+=MOV_TOT[pk]||0; idn+=MOV_IDN[pk]||0; }); return tot>0? Math.round(idn/tot*100) : null; }
+// aderência PONDERADA PELO TEMPO de um conjunto de registros (min identificados ÷ min de movimento total)
+// — reflete de verdade o vermelho da trilha (não é média simples dos %s diários)
+function aderRecs(recs){ let idn=0,tot=0; (recs||[]).forEach(r=>{ const arr=(r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[]); arr.forEach(p=>{ const pk=placaKey(p)+'|'+r.data; if(MOV_TOT[pk]){ tot+=MOV_TOT[pk]; idn+=(MOV_IDN[pk]||0); } }); });
+  if(tot>0) return Math.round(idn/tot*100);
+  let s=0,n=0; (recs||[]).forEach(r=>{ if(r.semelhanca!=null){ s+=r.semelhanca; n++; } }); return n?Math.round(s/n):null; }   // fallback demo (sem movimentação)
 // JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia)
 function parseJornada(P){
   const ponto={}, roster=new Set(), opBy={};
