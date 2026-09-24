@@ -1131,7 +1131,7 @@ function riscoComposto(m, alR){
   const reasons=[]; let grave=false;
   if(m.ident!=null && m.ident<CFG.sem){ reasons.push('identificação '+m.ident+'%'); if(m.ident<50) grave=true; }
   if(m.media!=null && m.meta && m.media<m.meta) reasons.push('média '+m.media.toFixed(2).replace('.',',')+' < meta '+m.meta.toFixed(2).replace('.',','));
-  const alto=(alR&&alR.niveis&&alR.niveis.ALTO)||0; if(alto>0){ reasons.push(alto+' alerta(s) nível alto'); if(alto>=5) grave=true; }
+  const alto=(alR&&alR.niveis&&alR.niveis.ALTO)||0; if(alto>0){ reasons.push(alto+' excesso de velocidade grave'); if(alto>=5) grave=true; }
   const ddH=(m.ddReal||0)/60; if(ddH>=2) reasons.push(hDec(m.ddReal)+' fora da jornada');
   const n=reasons.length;
   const cls = (n>=2||grave) ? 'vermelho' : (n===1 ? 'amarelo' : 'verde');
@@ -1538,7 +1538,7 @@ function fichaPontos(M){
   else if(M.ddRealTotal>0) crit.push(`<b>${hDec(M.ddRealTotal)}</b> de condução fora da jornada (aderência ${M.aderJornadaVal!=null?M.aderJornadaVal+'%':'—'}) — vale conferir.`);
   else pos.push(`Jornada certinha${M.aderJornadaVal!=null?' ('+M.aderJornadaVal+'%)':''}: condução dentro do horário do ponto.`);
   const alto=(M.alR.niveis&&M.alR.niveis.ALTO)||0;
-  if(alto>0) crit.push(`<b>${alto}</b> alerta(s) de severidade ALTA na câmera no período.`);
+  if(alto>0) crit.push(`<b>${alto}</b> excesso(s) de velocidade em nível alto no período.`);
   if(M.totAl<=2 && M.alR.real) pos.push(`Poucos alertas no período (${M.totAl}).`);
   if(M.mediaR!=null){
     if(!M.medaOk) crit.push(`Média <b>${nf(M.mediaR)}</b> km/l abaixo da meta (${nf(M.metaFicha)}).`);
@@ -1560,7 +1560,7 @@ function planoDeAcao(M){
   if(M.ddRealTotal>=120) acoes.push({ic:'🕵️',t:'Apurar uso fora da jornada',d:`${hDec(M.ddRealTotal)} de movimento fora do ponto — apurar com o motorista e registrar justificativa/autorização.`});
   else if(M.ddRealTotal>0) acoes.push({ic:'🕵️',t:'Conferir movimento fora da jornada',d:`${hDec(M.ddRealTotal)} fora do ponto — confirmar se foi manobra/pátio ou algo a alinhar com o motorista.`});
   const alto=(M.alR.niveis&&M.alR.niveis.ALTO)||0;
-  if(alto>0) acoes.push({ic:'🎓',t:'Feedback / treinamento',d:`${alto} alerta(s) de nível ALTO no período — dar feedback ao condutor e acompanhar na próxima semana.`});
+  if(alto>0) acoes.push({ic:'🎓',t:'Feedback / direção segura',d:`${alto} excesso(s) de velocidade em nível alto — dar feedback ao condutor e acompanhar na próxima semana.`});
   if(M.mediaR!=null && !M.medaOk) acoes.push({ic:'⛽',t:'Plano de consumo',d:`Média ${nf(M.mediaR)} < meta ${nf(M.metaFicha)} — orientar direção econômica e comparar na próxima medição.`});
   if(M.hexTotal>0) acoes.push({ic:'⏱️',t:'Ajustar escala',d:`${hDec(M.hexTotal)} de hora extra em ${M.diasHex} dia(s) — validar/adequar a jornada com a operação.`});
   if(!acoes.length) acoes.push({ic:'✅',t:'Manter monitoramento',d:'Sem ação corretiva necessária no período — seguir acompanhando os indicadores.'});
@@ -1590,8 +1590,9 @@ function renderFicha(){
   // tiles de alertas: relatório real → por severidade (Alto/Médio/Baixo); demo → 5 tipos
   const tiposArr = alR.real ? Object.entries(alR.tipos||{}).sort((a,b)=>b[1]-a[1]) : [];
   const temNiv = alR.real && alR.niveis && (alR.niveis.ALTO||alR.niveis.MEDIO||alR.niveis.BAIXO);
+  const sevTot = temNiv ? ((alR.niveis.ALTO||0)+(alR.niveis.MEDIO||0)+(alR.niveis.BAIXO||0)) : 0;
   const sevLine = temNiv ? NIVEL_DEF.map(a=>`${a.ic} ${((alR.niveis&&alR.niveis[a.k])||0).toLocaleString('pt-BR')} ${a.lab.toLowerCase()}`).join(' · ') : '';
-  const alertaSubt = alR.real ? (totAl?('por tipo'+(temNiv?(' · severidade: '+sevLine):'')+' · total '+totAl.toLocaleString('pt-BR')):'sem alertas no período') : '5 tipos monitorados (demo)';
+  const alertaSubt = alR.real ? (totAl?('por tipo · total '+totAl.toLocaleString('pt-BR')+(temNiv?(' · <b>excesso de velocidade</b> por severidade ('+sevTot.toLocaleString('pt-BR')+'): '+sevLine):'')):'sem alertas no período') : '5 tipos monitorados (demo)';
   const maxTipo = tiposArr.length?tiposArr[0][1]:0;
   const alertTiles = alR.real
     ? (tiposArr.length ? tiposArr.map(([tp,n])=>`<div class="alert-tile ${n===maxTipo&&n>0?'hot':''}"><div class="n">${alertaIcon(tp)} ${n.toLocaleString('pt-BR')}</div><div class="l">${tipoLabel(tp)}</div></div>`).join('') : '<div class="empty" style="padding:16px">sem alertas no período</div>')
@@ -1631,7 +1632,7 @@ function renderFicha(){
       <div class="card kpi"><div class="accent" style="background:${hexTotal>0?'var(--warning)':'var(--muted)'}"></div>
         <div class="lab">Hora extra (&gt;7h20)</div><div class="val tnum">${hDec(hexTotal)}</div><div class="sub">${diasHex} dia(s) acima da jornada</div></div>
       <div class="card kpi"><div class="accent" style="background:${(alR.niveis&&alR.niveis.ALTO)?'var(--critical)':(totAl>0?'var(--warning)':'var(--muted)')}"></div>
-        <div class="lab">Alertas (total)</div><div class="val tnum">${totAl.toLocaleString('pt-BR')}</div><div class="sub">${alR.real?'no período':'na câmera Trimble'}${alR.niveis&&alR.niveis.ALTO?' · '+alR.niveis.ALTO+' alto':''}</div></div>
+        <div class="lab">Alertas (total)</div><div class="val tnum">${totAl.toLocaleString('pt-BR')}</div><div class="sub">todos os tipos${alR.niveis&&alR.niveis.ALTO?' · '+alR.niveis.ALTO+' veloc. em nível alto':''}</div></div>
     </div>
 
     <div class="sec-title"><h2>Alertas</h2><span>${alertaSubt}</span></div>
@@ -1731,7 +1732,7 @@ function exportFichaPDF(){
     ${pdfKpi('Aderência (motorista)', (M.semelMot==null?'—':M.semelMot+'<small>%</small>'), 'reconhecido como '+pdfEsc(firstName(nome)), M.semelMot==null?'#94a3b8':(M.semelMot>=CFG.sem?'#10b981':'#ef4444'))}
     ${pdfKpi('③ Aderência de jornada', (M.aderJornadaVal==null?'—':M.aderJornadaVal+'<small>%</small>'), hDec(M.ddRealTotal)+' fora da jornada', M.aderJornadaVal==null?'#94a3b8':(M.aderJornadaVal>=90?'#10b981':M.aderJornadaVal>=70?'#f59e0b':'#ef4444'))}
     ${pdfKpi('Hora extra (&gt;7h20)', hDec(M.hexTotal), M.diasHex+' dia(s) acima', M.hexTotal>0?'#f59e0b':'#94a3b8')}
-    ${pdfKpi('Alertas (total)', M.totAl.toLocaleString('pt-BR'), (alto?alto+' de nível alto':(M.alR.real?'no período':'câmera Trimble')), alto?'#ef4444':(M.totAl>0?'#f59e0b':'#94a3b8'))}
+    ${pdfKpi('Alertas (total)', M.totAl.toLocaleString('pt-BR'), (alto?alto+' veloc. em nível alto':'todos os tipos'), alto?'#ef4444':(M.totAl>0?'#f59e0b':'#94a3b8'))}
   </div>`;
   const pontos=`<div class="cols">
     <div class="col crit"><h3>⚠️ Pontos de atenção</h3><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
