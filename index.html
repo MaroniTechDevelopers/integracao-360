@@ -1688,6 +1688,11 @@ function pdfShell(titulo, sub, badge, corpo){
   ul.plan{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
   ul.plan li{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.4;padding:8px 10px;background:#f8fafc;border-radius:8px;border-left:3px solid #f5c800}
   ul.plan li span{font-size:15px;flex:none}
+  .alertas{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+  .atile{border:1px solid #e5e7eb;border-radius:9px;padding:9px 8px;text-align:center;background:#fff}
+  .atile.hot{border-color:#ef4444;background:#fef2f2}
+  .atile .an{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+  .atile .al{font-size:9.5px;color:#64748b;text-transform:uppercase;letter-spacing:.02em;margin-top:2px;line-height:1.2}
   table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid #eef2f7}
   th{background:#f8fafc;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:#475569}
@@ -1732,11 +1737,19 @@ function exportFichaPDF(){
     <div class="col crit"><h3>⚠️ Pontos de atenção</h3><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
     <div class="col pos"><h3>✅ Pontos fortes</h3><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
   </div>`;
+  // Alertas por tipo (mesmos tiles da ficha na tela): real = alR.tipos; demo = ALERTA_DEF
+  const tiposArr = M.alR.real ? Object.entries(M.alR.tipos||{}).sort((a,b)=>b[1]-a[1]) : [];
+  const maxTipo = tiposArr.length?tiposArr[0][1]:0;
+  const alertaTiles = M.alR.real
+    ? tiposArr.map(([tp,nv])=>`<div class="atile${nv===maxTipo&&nv>0?' hot':''}"><div class="an">${alertaIcon(tp)} ${nv.toLocaleString('pt-BR')}</div><div class="al">${pdfEsc(tipoLabel(tp))}</div></div>`).join('')
+    : ALERTA_DEF.map(a=>{ const nv=(M.d.alertas&&M.d.alertas[a.k])||0; return `<div class="atile${nv>=5?' hot':''}"><div class="an">${a.ic} ${nv}</div><div class="al">${a.lab}</div></div>`; }).join('');
+  const alertaSub = M.alR.real ? (M.totAl?'por tipo · total '+M.totAl.toLocaleString('pt-BR'):'sem alertas no período') : '5 tipos monitorados (demo)';
+  const alertasBloco = alertaTiles ? `<h2 class="sec">Alertas — ${alertaSub}</h2><div class="alertas">${alertaTiles}</div>` : '';
   const PL=planoDeAcao(M);
   const plano=`<ul class="plan">${PL.map(a=>`<li><span>${a.ic}</span><div><b>${pdfEsc(a.t)}</b> — ${pdfEsc(a.d)}</div></li>`).join('')}</ul>`;
   const reco=`<div class="reco"><b>Leitura geral: ${pdfEsc(M.reco.tit)}</b>${pdfEsc(M.reco.txt)}</div>`;
   const sub=`${M.op||'—'}${M.placas?' · '+M.placas:''} · ${M.tempo} de casa · ${periodoLabel()}`;
-  const corpo=kpis+'<h2 class="sec">Pontos de atenção × pontos fortes</h2>'+pontos+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco;
+  const corpo=kpis+'<h2 class="sec">Pontos de atenção × pontos fortes</h2>'+pontos+alertasBloco+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco;
   pdfOpen(pdfShell('Integração 360 — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
 }
 function exportPainelPDF(){
