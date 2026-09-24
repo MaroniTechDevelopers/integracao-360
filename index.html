@@ -1749,6 +1749,10 @@ function pdfShell(titulo, sub, badge, corpo){
   .atile.hot{border-color:#ef4444;background:#fef2f2}
   .atile .an{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
   .atile .al{font-size:9.5px;color:#64748b;text-transform:uppercase;letter-spacing:.02em;margin-top:2px;line-height:1.2}
+  ul.trat{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  ul.trat li{border-left:3px solid #f5c800;background:#f8fafc;border-radius:8px;padding:9px 11px;font-size:12px;line-height:1.4}
+  ul.trat .tt-tag{display:inline-block;background:#fdf3c4;color:#8a6d00;font-weight:700;font-size:10px;padding:1px 7px;border-radius:20px;margin-right:6px}
+  ul.trat .tt-o{color:#334155;margin-top:4px;white-space:pre-wrap}
   table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid #eef2f7}
   th{background:#f8fafc;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:#475569}
@@ -1804,8 +1808,12 @@ function exportFichaPDF(){
   const PL=planoDeAcao(M);
   const plano=`<ul class="plan">${PL.map(a=>`<li><span>${a.ic}</span><div><b>${pdfEsc(a.t)}</b> — ${pdfEsc(a.d)}</div></li>`).join('')}</ul>`;
   const reco=`<div class="reco"><b>Leitura geral: ${pdfEsc(M.reco.tit)}</b>${pdfEsc(M.reco.txt)}</div>`;
+  const trats=tratList(nome);
+  const tratBloco = trats.length
+    ? `<h2 class="sec">Tratativas com o motorista (${trats.length})</h2><ul class="trat">${trats.map(t=>`<li><div><span class="tt-tag">${pdfEsc(t.tipo||'—')}</span><b>${brDate(t.data)}</b>${t.gestor?' · '+pdfEsc(t.gestor):''}</div>${t.obs?'<div class="tt-o">'+pdfEsc(t.obs)+'</div>':''}</li>`).join('')}</ul>`
+    : '<h2 class="sec">Tratativas com o motorista</h2><div style="font-size:12px;color:#64748b">Nenhuma tratativa registrada ainda.</div>';
   const sub=`${M.op||'—'}${M.placas?' · '+M.placas:''} · ${M.tempo} de casa · ${periodoLabel()}`;
-  const corpo=kpis+'<h2 class="sec">Pontos de atenção × pontos fortes</h2>'+pontos+alertasBloco+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco;
+  const corpo=kpis+'<h2 class="sec">Pontos de atenção × pontos fortes</h2>'+pontos+alertasBloco+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco+tratBloco;
   pdfOpen(pdfShell('Integração 360 — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
 }
 function exportPainelPDF(){
