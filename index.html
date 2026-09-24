@@ -379,7 +379,6 @@
     </div>
     <div class="head-tools">
       <span class="pill" id="dataModePill"><span class="dot"></span> <b id="dataModeTxt">dados de demonstração</b></span>
-      <button class="btn" id="spBtn" title="Entrar com Microsoft e atualizar os dados a partir da pasta do SharePoint">☁️ Atualizar do SharePoint</button>
       <button class="btn" id="themeBtn" title="Alternar tema">🌗 Tema</button>
       <button class="btn" id="printBtn" title="Gerar relatório executivo do painel em PDF (respeita os filtros)">📄 Relatório PDF</button>
     </div>
@@ -535,6 +534,19 @@
 
   <!-- ===== DADOS ===== -->
   <section class="view" id="view-dados">
+    <div id="dadosGate" class="card" style="display:none;text-align:center;padding:44px 24px;max-width:560px;margin:24px auto">
+      <div style="font-size:34px">🔒</div>
+      <h2 style="margin:8px 0 4px;font-size:18px">Área de administração</h2>
+      <p style="color:var(--muted);font-size:13px;max-width:430px;margin:6px auto 16px">Importação de relatórios, integração com o SharePoint e configurações são restritas ao administrador. Entre com a conta <b>maroni.tech</b> da Transmaroni.</p>
+      <button class="btn solid" id="dadosLogin">Entrar com Microsoft</button>
+    </div>
+    <div id="dadosContent">
+    <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px">
+      <b>Integração SharePoint</b>
+      <button class="btn solid" id="spBtn" title="Entrar e atualizar os dados a partir da pasta do SharePoint">☁️ Atualizar do SharePoint</button>
+      <span id="dadosWho" style="font-size:12px;color:var(--muted)"></span>
+      <button class="btn" id="dadosLogout" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">Sair</button>
+    </div>
     <div class="sec-title"><h2>Carregar os relatórios</h2><span>cruza por motorista + dia · CSV/Excel · fica neste navegador</span></div>
     <div class="drops drops-4">
       <div class="drop" id="drop-ponto">
@@ -661,6 +673,7 @@
       </ul>
       <p style="color:var(--muted)">As bases carregadas ficam só neste navegador (localStorage). Nada é enviado para fora.</p>
     </div>
+    </div><!-- /#dadosContent -->
   </section>
 
   <div class="footer">
@@ -2852,7 +2865,8 @@ const SP_CFG = {
   sitePath:'/sites/gestao.desenvolvimento',
   folder:'Relatório Integração 360',
   tratList:'Tratativas Integração 360',
-  scopes:['Sites.ReadWrite.All','User.Read']   // ReadWrite: ler relatórios + gravar tratativas na Lista
+  scopes:['Sites.ReadWrite.All','User.Read'],   // ReadWrite: ler relatórios + gravar tratativas na Lista
+  adminEmails:['maroni.tech@transmaroni.com.br']   // quem enxerga a aba Dados (guarda-corpo de UX; segurança real = SharePoint)
 };
 let _msal=null;
 function spMsal(){
@@ -2941,6 +2955,13 @@ function tratKey(nome){ const nn=norm(nome); const cpf=(typeof NOME2CPF!=='undef
 function tratList(nome){ const m=TRAT_CACHE||tratLocalLoad(); return (m[tratKey(nome)]||[]).slice().sort((a,b)=>String(b.data||'').localeCompare(String(a.data||''))); }
 function spSignedIn(){ try{ return !!(typeof msal!=='undefined' && _msal && _msal.getAllAccounts && _msal.getAllAccounts()[0]); }catch(e){ return false; } }
 function spGestor(){ try{ const a=_msal.getAllAccounts()[0]; return a?{nome:a.name||a.username||'', email:a.username||''}:{nome:'',email:''}; }catch(e){ return {nome:'',email:''}; } }
+function spEmail(){ try{ const a=_msal&&_msal.getAllAccounts&&_msal.getAllAccounts()[0]; return a?String(a.username||'').toLowerCase():''; }catch(e){ return ''; } }
+function isAdmin(){ const e=spEmail(); return !!e && (SP_CFG.adminEmails||[]).map(x=>String(x).toLowerCase()).includes(e); }
+async function spLoginId(){ try{ const pca=spMsal(); if(pca.initialize) await pca.initialize(); const r=await pca.acquireTokenPopup({scopes:['User.Read']}); return r.account; }catch(e){ toast('Login: '+(e.message||'cancelado')); return null; } }
+// mostra/esconde a aba Dados conforme o e-mail logado (guarda-corpo de UX)
+function applyDadosGate(){ const gate=$('#dadosGate'), content=$('#dadosContent'); if(!gate||!content) return; const ok=isAdmin();
+  gate.style.display=ok?'none':'block'; content.style.display=ok?'block':'none';
+  const who=$('#dadosWho'); if(who) who.textContent=ok?('conectado como '+spEmail()):''; }
 async function gpost(path, token, body){ const r=await fetch('https://graph.microsoft.com/v1.0'+path,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!r.ok){ const t=await r.text().catch(()=>''); throw new Error('Graph '+r.status+(t?': '+t.slice(0,180):'')); } return r.json(); }
 async function spSiteId(token){ if(SP_SITE_ID) return SP_SITE_ID; const s=await gget('/sites/'+SP_CFG.siteHost+':'+SP_CFG.sitePath, token); SP_SITE_ID=s.id; return s.id; }
 async function spEnsureTratList(token){ if(SP_LIST_ID) return SP_LIST_ID; const site=await spSiteId(token);
@@ -3001,7 +3022,8 @@ async function salvarTratativa(){
 function goTab(t){ const b=document.querySelector('#tabs button[data-tab="'+t+'"]'); if(b) b.click(); }
 $('#tabs').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
   $$('#tabs button').forEach(x=>x.classList.toggle('active',x===b));
-  $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+b.dataset.tab)); window.scrollTo(0,0); });
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+b.dataset.tab)); window.scrollTo(0,0);
+  if(b.dataset.tab==='dados') applyDadosGate(); });
 // KPIs clicáveis → abrem a aba que detalha a informação
 $('#kpis').addEventListener('click',e=>{ const c=e.target.closest('.kpi[data-tab]'); if(!c)return; goTab(c.dataset.tab); });
 // foca um registro (motorista+dia) na Linha do tempo
@@ -3038,7 +3060,10 @@ $('#themeBtn').onclick=()=>applyTheme(document.documentElement.getAttribute('dat
 (function(){ let t='light'; try{t=localStorage.getItem(LS.theme)||'light';}catch(e){} if(t==='dark')applyTheme('dark'); })();
 $('#printBtn').onclick=exportPainelPDF;
 $('#fichaPdf').onclick=exportFichaPDF;
-$('#spBtn').onclick=()=>spLoadAll(true);
+$('#spBtn').onclick=()=>spLoadAll(true).then(()=>applyDadosGate());
+$('#dadosLogin').onclick=()=>spLoginId().then(()=>applyDadosGate());
+$('#dadosLogout').onclick=async()=>{ try{ if(_msal) await _msal.logoutPopup({}); }catch(e){} try{localStorage.removeItem('sp_auto');}catch(e){} TRAT_CACHE=null; _tratSyncTried=false; applyDadosGate(); goTab('semana'); };
+applyDadosGate();
 // auto: se já autenticou antes nesta máquina, tenta atualizar silenciosamente ao abrir
 (function(){ try{ if(localStorage.getItem('sp_auto')==='1'){ setTimeout(()=>{ if(typeof msal!=='undefined') spLoadAll(false); }, 500); } }catch(e){} })();
 // filtros
