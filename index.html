@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conferência Ponto × Movimentação × Trimble — Dedo Duro</title>
+<title>Conferência Ponto × Movimentação × Trimble — Integração 360</title>
 <link rel="icon" id="favicon" type="image/png" href="">
 <style>
   /* ============ TEMA (identidade Grupo Maroni — claro padrão, toggle p/ escuro) ============ */
@@ -355,7 +355,7 @@
       <img class="brand-logo" id="brandLogo" alt="Grupo Maroni" src="">
       <div>
         <h1>Conferência de Jornada — Ponto × Movimentação × Trimble</h1>
-        <div class="sub">Projeto <b>Dedo Duro</b> · cruzamento folha de ponto × movimentação do veículo × identificação facial</div>
+        <div class="sub">Projeto <b>Integração 360</b> · cruzamento folha de ponto × movimentação do veículo × identificação facial</div>
       </div>
     </div>
     <div class="head-tools">
@@ -368,7 +368,7 @@
     <button data-tab="semana" class="active">Resumo semanal</button>
     <button data-tab="aderencia">Aderência</button>
     <button data-tab="linha">Linha do tempo</button>
-    <button data-tab="diverg">Divergências <span class="badge" id="badgeDiv">0</span></button>
+    <button data-tab="diverg">Pontos de atenção <span class="badge" id="badgeDiv">0</span></button>
     <button data-tab="media">Média</button>
     <button data-tab="tabela">Consolidado</button>
     <button data-tab="operacao">Operação por placa</button>
@@ -389,7 +389,7 @@
     <div class="f"><label>Motorista</label><select id="fMot"><option value="">Todos</option></select></div>
     <div class="f"><label>Situação</label><select id="fStatus">
       <option value="">Todas</option>
-      <option value="critico">Crítico</option>
+      <option value="critico">Prioridade</option>
       <option value="atencao">Atenção</option>
       <option value="pendente">Pendência</option>
       <option value="conforme">Conforme</option>
@@ -401,7 +401,7 @@
   <!-- ===== RESUMO SEMANAL (CAPIVARA) ===== -->
   <section class="view active" id="view-semana">
     <div class="grid kpis" id="kpis"></div>
-    <div class="sec-title"><h2>Resumo semanal — Dedo Duro</h2><span>horas de movimento fora do ponto, por operação · farol por motorista/semana</span>
+    <div class="sec-title"><h2>Resumo semanal</h2><span>aderência de jornada por operação · farol por motorista/semana</span>
       <button class="btn" id="expSemana" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">⬇️ Exportar CSV</button></div>
     <div class="card" style="padding:11px 16px;margin-bottom:12px">
       <div class="legend">
@@ -409,7 +409,7 @@
         <span class="lg"><span class="sw" style="background:var(--good)"></span> Verde — sem sinais</span>
         <span class="lg"><span class="sw" style="background:var(--warning)"></span> Amarelo — 1 sinal</span>
         <span class="lg"><span class="sw" style="background:var(--critical)"></span> Vermelho — 2+ sinais (ou 1 grave)</span>
-        <span class="lg" style="margin-left:auto;color:var(--muted)">sinais: identificação baixa · alertas alto · média &lt; meta · dedo duro real</span>
+        <span class="lg" style="margin-left:auto;color:var(--muted)">sinais: identificação baixa · alertas alto · média &lt; meta · fora da jornada</span>
       </div>
     </div>
     <div id="semanaBox"></div>
@@ -438,7 +438,7 @@
       <div class="legend">
         <span class="lg"><span class="sw" style="background:var(--track-ponto)"></span> Ponto (jornada)</span>
         <span class="lg"><span class="sw" style="background:var(--track-mov)"></span> Direção do veículo (com placa)</span>
-        <span class="lg"><span class="sw" style="background:transparent;outline:2px dashed var(--serious);outline-offset:-2px"></span> dedo duro (fora do ponto)</span>
+        <span class="lg"><span class="sw" style="background:transparent;outline:2px dashed var(--serious);outline-offset:-2px"></span> fora da jornada</span>
         <span class="lg"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 3px,#0000 3px,#0000 6px)"></span> dirigiu no almoço</span>
         <span class="lg">alertas no horário: 📱 celular · ⏱️ velocidade · 😴 fadiga · 👁️ distração · 🔒 cinto — haste por severidade <b style="color:var(--critical)">alto</b>/<b style="color:var(--warning)">médio</b>/<b style="color:var(--s2)">baixo</b></span>
         <span class="lg"><span class="sw" style="background:var(--track-id-ok)"></span> identificado &nbsp;<span class="sw" style="background:var(--serious);outline:2px solid var(--crit-ink);outline-offset:-2px"></span> câmera reconheceu OUTRO &nbsp;<span class="sw" style="background:var(--track-id-bad)"></span> sem identificação</span>
@@ -450,7 +450,7 @@
 
   <!-- ===== DIVERGÊNCIAS ===== -->
   <section class="view" id="view-diverg">
-    <div class="sec-title"><h2>Divergências detectadas</h2><span id="divCount"></span>
+    <div class="sec-title"><h2>Pontos de atenção</h2><span id="divCount"></span>
       <label style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Tipo de divergência
         <select id="fTipoDiv" style="color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 10px;font:inherit;font-size:13px;text-transform:none;letter-spacing:normal;cursor:pointer"><option value="">Todos</option></select>
       </label>
@@ -481,7 +481,7 @@
         <th data-k="primMov">Direção</th>
         <th data-k="horasMov">h condução</th>
         <th data-k="horaExtra">Hora extra</th>
-        <th data-k="horasDedoDuro">Dedo duro</th>
+        <th data-k="horasDedoDuro">Fora da jornada</th>
         <th data-k="_sev">Situação</th>
       </tr></thead>
       <tbody id="tblBody"></tbody>
@@ -599,9 +599,9 @@
       <div class="cfg">
         <div class="cf"><label>Tolerância de alinhamento (min)</label><input type="number" id="cfgTol" value="20" min="0"></div>
         <div class="cf"><label>Semelhança facial mínima (%)</label><input type="number" id="cfgSem" value="80" min="0" max="100"></div>
-        <div class="cf"><label>Dedo duro a partir de (min)</label><input type="number" id="cfgFora" value="15" min="0"></div>
+        <div class="cf"><label>Fora da jornada a partir de (min)</label><input type="number" id="cfgFora" value="15" min="0"></div>
         <div class="cf"><label>Movimento mínimo p/ considerar (min)</label><input type="number" id="cfgMovMin" value="5" min="0"></div>
-        <div class="cf"><label>Farol amarelo até (min de dedo duro/semana)</label><input type="number" id="cfgFarol" value="60" min="0"></div>
+        <div class="cf"><label>Farol amarelo até (min fora da jornada/semana)</label><input type="number" id="cfgFarol" value="60" min="0"></div>
         <div class="cf"><label>Meta de média (km/l)</label><input type="number" id="cfgMeta" value="2.40" min="0" step="0.01"></div>
         <div class="cf"><label>Preço do litro (R$) — simulação de custo</label><input type="number" id="cfgPreco" value="6.00" min="0" step="0.01"></div>
         <div class="cf"><label>Almoço mínimo — pausa válida (min)</label><input type="number" id="cfgAlmoco" value="30" min="0"></div>
@@ -613,12 +613,12 @@
     <div class="sec-title"><h2>Como funciona</h2></div>
     <div class="card docs">
       <p>O painel cruza <b>três fontes independentes</b> por <b>motorista + dia</b> e aponta onde elas não batem —
-         a base do <b>Dedo Duro</b>: garantir que quem bateu ponto é quem realmente dirigiu o veículo, nos horários certos.</p>
+         a base da <b>Integração 360</b>: garantir que quem bateu ponto é quem realmente dirigiu o veículo, nos horários certos.</p>
       <h4>O que cada situação significa</h4>
       <ul>
         <li><b style="color:var(--crit-ink)">Identificação divergente</b> — a câmera Trimble reconheceu um motorista <b>diferente</b> do escalado na folha. É o achado central.</li>
         <li><b style="color:var(--crit-ink)">Movimento sem ponto</b> — o veículo rodou mas não há batida de ponto no dia (trabalho não registrado ou terceiro dirigindo).</li>
-        <li><b style="color:var(--serious)">Deslocamento fora da jornada</b> — veículo em movimento antes da entrada ou depois da saída registrada (as <b>horas dedo duro</b>).</li>
+        <li><b style="color:var(--serious)">Deslocamento fora da jornada</b> — veículo em movimento antes da entrada ou depois da saída registrada (as <b>horas fora da jornada</b>).</li>
         <li><b style="color:var(--serious)">Marcou almoço mas conduziu na pausa</b> — há intervalo de almoço no ponto, mas o veículo se moveu dentro dele (não fez a pausa de verdade).</li>
         <li><b style="color:var(--serious)">Jornada sem intervalo de almoço</b> — seguiu direto: jornada longa sem nenhuma pausa registrada no ponto.</li>
         <li><b style="color:var(--serious)">Semelhança facial baixa</b> — a identificação existe, mas abaixo do limite de confiança.</li>
@@ -637,7 +637,7 @@
 
   <div class="footer">
     <img id="footLogo" alt="" src="">
-    <span>Grupo Maroni · Projeto Dedo Duro — Identificação de Condutor &amp; Média (Trimble)</span>
+    <span>Grupo Maroni · Integração 360 — Identificação de Condutor &amp; Média (Trimble)</span>
   </div>
 </main>
 
@@ -678,7 +678,7 @@ function isoWeek(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if
 // farol do dedo duro por horas (min): verde=sem horas · amarelo=até limite · vermelho=acima
 function farol(min){ if(min<=0) return 'verde'; if(min<=CFG.farolAmareloMax) return 'amarelo'; return 'vermelho'; }
 const FAROL_COR={verde:'var(--good)',amarelo:'var(--warning)',vermelho:'var(--critical)'};
-const SEV_LABEL={conforme:'Conforme',atencao:'Atenção',critico:'Crítico',pendente:'Pendência'};
+const SEV_LABEL={conforme:'Conforme',atencao:'Atenção',critico:'Prioridade',pendente:'Pendência'};
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 // info da semana ISO: chave ordenável (segunda), rótulo (S37) e o mês a que pertence (quinta da semana)
 function weekInfo(iso){
@@ -966,7 +966,7 @@ function analyze(rec){
   if(BASES.ponto && BASES.mov && hasPonto && mov.length && horasMov<movMin) flags.push({sev:'atencao',k:'sem_mov',t:'Veículo praticamente sem movimento'});
   if(BASES.trim && trimbleMot && norm(trimbleMot)!==norm(rec.motoristaEscala)) flags.push({sev:'critico',k:'id_diverg',t:'Identificação divergente — câmera reconheceu '+firstName(trimbleMot)});
   if(BASES.trim && semelhanca!=null && semelhanca<CFG.sem) flags.push({sev:'atencao',k:'semelhanca_baixa',t:'Semelhança facial baixa ('+semelhanca+'%)'});
-  if(BASES.ponto && BASES.mov && foraJornada>CFG.fora) flags.push({sev:'atencao',k:'dedo_duro',t:'Dedo duro: '+hm(foraJornada)+' fora da jornada'});
+  if(BASES.ponto && BASES.mov && foraJornada>CFG.fora) flags.push({sev:'atencao',k:'dedo_duro',t:'Fora da jornada: '+hm(foraJornada)+' de condução fora do ponto'});
   if(BASES.ponto && BASES.mov && hasPonto && primMov!=null && primMov < entrada-tol) flags.push({sev:'atencao',k:'mov_antes_entrada',t:'Veículo em movimento antes da entrada'});
   // ALMOÇO
   if(BASES.ponto && BASES.mov && almocoDirigido>=10) flags.push({sev:'atencao',k:'almoco_dirigido',t:'Marcou almoço mas conduziu na pausa ('+hm(almocoDirigido)+')'});
@@ -1064,7 +1064,8 @@ function renderKpis(rows){
   const total=rows.length;
   const conf=rows.filter(r=>r.sev==='conforme').length;
   const div=rows.filter(r=>r.sev!=='conforme').length;
-  const dedo=rows.reduce((a,r)=>a+(r.ddReal||0),0);   // dedo duro REAL (fora da jornada com ponto)
+  const dedo=rows.reduce((a,r)=>a+(r.ddReal||0),0);   // horas fora da jornada (com ponto)
+  const ajFrota=aderJornada(rows);                    // aderência de jornada (score positivo)
   const motsDedo=new Set(rows.filter(r=>(r.ddReal||0)>0).map(r=>r.motoristaEscala)).size;
   const hex=rows.reduce((a,r)=>a+(r.horaExtra||0),0);
   const motsHex=new Set(rows.filter(r=>r.horaExtra>0).map(r=>r.motoristaEscala)).size;
@@ -1089,7 +1090,7 @@ function renderKpis(rows){
   const opSel = $('#fOp').value;
   const K=[
     {lab:'① Identificação'+(opSel?' — '+opSel:''),val:(identSel==null?'—':identSel+'<small>%</small>'),sub:(identSel==null?'sem dado de identificação':'aderência da câmera'+(opSel?' na operação':' (frota)')),ac:(identSel==null?'var(--muted)':(identSel>=CFG.sem?'var(--good)':'var(--critical)')),tab:'semid'},
-    {lab:'③ Dedo duro real',val:hDec(dedo),sub:motsDedo+' motorista(s) · fora da jornada c/ ponto',ac:'var(--serious)',tab:'diverg'},
+    {lab:'③ Aderência de jornada',val:(ajFrota==null?'—':ajFrota+'<small>%</small>'),sub:hDec(dedo)+' fora da jornada · '+motsDedo+' motorista(s)',ac:ajColor(ajFrota),tab:'diverg'},
     {lab:'Cobertura de ponto',val:(cobPonto==null?'—':cobPonto+'<small>%</small>'),sub:'dias com movimento que têm ponto',ac:(cobPonto==null?'var(--muted)':(cobPonto>=90?'var(--good)':cobPonto>=70?'var(--warning)':'var(--critical)')),tab:'tabela'},
     {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto (pendência)',ac:'var(--critical)',tab:'diverg'},
     {lab:'Ponto sem movimento',val:pontoSemMov,sub:'bateu ponto e não dirigiu',ac:'var(--warning)',tab:'tabela'},
@@ -1115,7 +1116,7 @@ function riscoComposto(m, alR){
   if(m.ident!=null && m.ident<CFG.sem){ reasons.push('identificação '+m.ident+'%'); if(m.ident<50) grave=true; }
   if(m.media!=null && m.meta && m.media<m.meta) reasons.push('média '+m.media.toFixed(2).replace('.',',')+' < meta '+m.meta.toFixed(2).replace('.',','));
   const alto=(alR&&alR.niveis&&alR.niveis.ALTO)||0; if(alto>0){ reasons.push(alto+' alerta(s) nível alto'); if(alto>=5) grave=true; }
-  const ddH=(m.ddReal||0)/60; if(ddH>=2) reasons.push('dedo duro real '+hDec(m.ddReal));
+  const ddH=(m.ddReal||0)/60; if(ddH>=2) reasons.push(hDec(m.ddReal)+' fora da jornada');
   const n=reasons.length;
   const cls = (n>=2||grave) ? 'vermelho' : (n===1 ? 'amarelo' : 'verde');
   return {cls, reasons, n};
@@ -1141,9 +1142,10 @@ function semanaAgg(rows){
     const rng=activeRange();
     Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaVeic(m.placa,op); m.alertas=d.alertas||{}; m.admissao=d.admissao;
       m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.ident=aderRecs(m.recs);   // ponderado pelo tempo (min identificados ÷ total)
+      m.aj=aderJornada(m.recs);   // aderência de jornada (score positivo)
       m.risco=riscoComposto(m, alertasResumo(m.nome, rng)); m.farolUlt=m.risco.cls; });
     return { op, list:Object.values(mots).sort((a,b)=>{ const rk={vermelho:0,amarelo:1,verde:2}; return (rk[a.risco.cls]-rk[b.risco.cls]) || b.ddReal-a.ddReal; }),
-             dd:opRows.reduce((a,r)=>a+(r.ddReal||0),0),
+             dd:opRows.reduce((a,r)=>a+(r.ddReal||0),0), aj:aderJornada(opRows),
              motsDedo:Object.values(mots).filter(m=>m.ddReal>0).length };
   });
   return { weeks, ultima, data };
@@ -1155,7 +1157,7 @@ function renderSemana(rows){
   box.innerHTML = data.map(g=>`
     <div class="card op-block">
       <div class="op-head"><h3>${g.op}</h3>
-        <div class="op-kpi"><span>${hDec(g.dd)}</span> dedo duro · <b>${g.motsDedo}</b> motorista(s) c/ horas · ${g.list.length} motorista(s)</div></div>
+        <div class="op-kpi"><span style="color:${ajColor(g.aj)}">${g.aj==null?'—':g.aj+'%'}</span> aderência de jornada · ${hDec(g.dd)} fora da jornada · <b>${g.motsDedo}</b> motorista(s) · ${g.list.length} no total</div></div>
       <div class="capgrid">${ g.list.map(m=>capinha(m,weeks)).join('') }</div>
     </div>`).join('');
 }
@@ -1175,7 +1177,7 @@ function capinha(m,weeks){
     <div class="cap-metrics">
       <div class="cm"><span>Identif.</span><b class="${m.ident==null?'':(m.ident>=CFG.sem?'ok':'bad')}">${m.ident==null?'—':m.ident+'%'}</b></div>
       <div class="cm"><span>Média</span><b class="${medaOk?'ok':'bad'}">${medaTxt}</b></div>
-      <div class="cm"><span>Dedo duro</span><b class="${m.ddReal>0?'bad':''}" title="fora da jornada (com ponto)">${m.ddReal>0?hDec(m.ddReal):'0h'}</b></div>
+      <div class="cm"><span>Jornada</span><b class="${m.aj!=null&&m.aj<90?'bad':'ok'}" title="aderência de jornada — % da condução dentro do ponto${m.ddReal>0?' · '+hDec(m.ddReal)+' fora':''}">${m.aj==null?'—':m.aj+'%'}</b></div>
       <div class="cm"><span>Alertas</span><b class="${totAl>=5?'bad':''}">${totAl}</b></div>
     </div>
     <div class="cap-foot">
@@ -1252,7 +1254,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       <div class="m"><span>h ponto</span><b>${hpon?hDec(hpon):'—'}</b></div>
       <div class="m"><span>h condução</span><b style="color:${hcond>hpon+CFG.tol?'var(--serious)':'inherit'}">${hcond?hDec(hcond):'—'}</b></div>
       <div class="m"><span>Hora extra</span><b style="color:${hex>0?'var(--warning)':'inherit'}">${hex>0?hDec(hex):'—'}</b></div>
-      <div class="m"><span>Dedo duro</span><b style="color:${dd>0?'var(--serious)':'inherit'}">${dd>0?hDec(dd):'—'}</b></div>
+      <div class="m"><span>Fora da jornada</span><b style="color:${dd>0?'var(--serious)':'inherit'}">${dd>0?hDec(dd):'—'}</b></div>
       <div class="m"><span title="aderência da identificação facial na Trimble">Identif.</span><b style="color:${identPct==null?'var(--muted)':(identPct>=CFG.sem?'var(--good)':'var(--critical)')}">${identPct==null?'—':identPct+'%'}</b></div>
       ${alertas.length?`<div class="m"><span>Alertas</span><b style="color:${nAlto>0?'var(--critical)':'var(--warning)'}">${alertas.length}${nAlto?' · '+nAlto+' alto':''}</b></div>`:''}
       <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div>
@@ -1425,7 +1427,7 @@ function timelinesHTML(rows){
           <div class="m"><span>Ponto</span><b>${r.entrada!=null?hm(r.entrada)+'–'+hm(r.saida):'—'}</b></div>
           <div class="m"><span>Direção</span><b>${r.primMov!=null?hm(r.primMov)+'–'+hm(r.ultMov):'—'}</b></div>
           <div class="m"><span>Condutor</span><b style="color:${r.idDivergente?'var(--crit-ink)':'inherit'}">${firstName(r.trimbleMot||r.motoristaEscala)}</b></div>
-          <div class="m"><span>Dedo duro</span><b style="color:${r.horasDedoDuro>0?'var(--serious)':'inherit'}">${r.horasDedoDuro>0?hDec(r.horasDedoDuro):'—'}</b></div>
+          <div class="m"><span>Fora da jornada</span><b style="color:${r.horasDedoDuro>0?'var(--serious)':'inherit'}">${r.horasDedoDuro>0?hDec(r.horasDedoDuro):'—'}</b></div>
           <div class="m"><span>Veículo</span><b>${veicMeta}</b></div>
           <div class="m"><span>Km</span><b>${r.km?Math.round(r.km):'—'}</b></div>
         </div>
@@ -1462,7 +1464,7 @@ function recomendacao(anosMeses, media, totAl, dd){
   if(anos>=2 && boaMedia && poucosAlertas)
     return {cls:'manter',tit:'Perfil sólido — evento atípico pode ser relevado',txt:`${anosMeses} de casa, média ${media.toFixed(2).replace('.',',')} (≥ meta) e poucos alertas. Uma ocorrência isolada tende a ser exceção.`};
   if((media!=null && media<CFG.meta) && (totAl>=5 || (drv(fichaAtual).alertas.celular||0)>=5))
-    return {cls:'questionar',tit:'Perfil de risco — revisar permanência',txt:`Média ${media!=null?media.toFixed(2).replace('.',','):'—'} (< meta), ${totAl} alertas${(drv(fichaAtual).alertas.celular||0)>=5?' (uso alto de celular)':''}${dd>0?' e '+hDec(dd)+' de dedo duro':''}. Reunir com gestão.`};
+    return {cls:'questionar',tit:'Vale uma conversa de apoio',txt:`Média ${media!=null?media.toFixed(2).replace('.',','):'—'} (< meta), ${totAl} alertas${(drv(fichaAtual).alertas.celular||0)>=5?' (uso alto de celular)':''}${dd>0?' e '+hDec(dd)+' fora da jornada':''}. Conversar com o motorista e combinar um plano de melhoria.`};
   return {cls:'observar',tit:'Observar — manter plano de ação',txt:`Indicadores intermediários. Registrar causa-raiz e a ação da semana; comparar na próxima.`};
 }
 // rótulo amigável do período ativo (usado nos relatórios em PDF)
@@ -1491,6 +1493,7 @@ function fichaMetrics(nome){
   const diasHex=recs.filter(r=>r.horaExtra>0).length;
   const semel=aderRecs(recs);   // aderência da CÂMERA/placa (qualquer condutor) — ponderada pelo tempo
   const semelMot=aderMotoristaRecs(recs);   // aderência DO MOTORISTA (reconhecido como ele ÷ movimento)
+  const aderJornadaVal=aderJornada(recs);   // aderência de jornada (score positivo)
   const op=[...new Set(recs.map(r=>r.operacao))].join(', ');
   const placas=[...new Set(recs.map(r=>r.placa).filter(Boolean))].join(', ');
   const alR=alertasResumo(nome, activeRange()); const totAl=alR.total;
@@ -1504,7 +1507,7 @@ function fichaMetrics(nome){
   const risco=riscoComposto({ident:semel, media:mediaR, meta:metaFicha, ddReal:ddRealTotal}, alR);
   const condDiv=recs.filter(r=>r.idDivergente||r.condutorDivergente).length;
   const diasComMov=recs.filter(r=>r.primMov!=null).length;
-  return {nome,recs,d,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,op,placas,alR,totAl,tempo,kmR,litrosR,abF,mediaR,metaFicha,medaOk,reco,risco,condDiv,diasComMov};
+  return {nome,recs,d,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,aderJornadaVal,op,placas,alR,totAl,tempo,kmR,litrosR,abF,mediaR,metaFicha,medaOk,reco,risco,condDiv,diasComMov};
 }
 // pontos críticos e positivos p/ o relatório executivo
 function fichaPontos(M){
@@ -1515,9 +1518,9 @@ function fichaPontos(M){
     else pos.push(`Boa aderência: câmera <b>${M.semel}%</b>${M.semelMot!=null?' · motorista <b>'+M.semelMot+'%</b>':''}.`);
   }
   if(M.condDiv>0) crit.push(`Condutor reconhecido <b>incorreto</b> em ${M.condDiv} dia(s) — revisar cadastro/atribuição da viagem.`);
-  if(M.ddRealTotal>=120) crit.push(`Dedo duro real de <b>${hDec(M.ddRealTotal)}</b> — veículo em movimento fora da jornada do ponto.`);
-  else if(M.ddRealTotal>0) crit.push(`<b>${hDec(M.ddRealTotal)}</b> de movimento fora do ponto (dedo duro) — revisar.`);
-  else pos.push(`Sem dedo duro real: movimento do veículo compatível com o ponto.`);
+  if(M.ddRealTotal>=120) crit.push(`Aderência de jornada <b>${M.aderJornadaVal!=null?M.aderJornadaVal+'%':'—'}</b> — <b>${hDec(M.ddRealTotal)}</b> de condução fora do horário do ponto.`);
+  else if(M.ddRealTotal>0) crit.push(`<b>${hDec(M.ddRealTotal)}</b> de condução fora da jornada (aderência ${M.aderJornadaVal!=null?M.aderJornadaVal+'%':'—'}) — vale conferir.`);
+  else pos.push(`Jornada certinha${M.aderJornadaVal!=null?' ('+M.aderJornadaVal+'%)':''}: condução dentro do horário do ponto.`);
   const alto=(M.alR.niveis&&M.alR.niveis.ALTO)||0;
   if(alto>0) crit.push(`<b>${alto}</b> alerta(s) de severidade ALTA na câmera no período.`);
   if(M.totAl<=2 && M.alR.real) pos.push(`Poucos alertas no período (${M.totAl}).`);
@@ -1539,7 +1542,7 @@ function planoDeAcao(M){
   if(M.semel!=null && M.semel<CFG.sem) acoes.push({ic:'📷',t:'Câmera / cadastro facial',d:`Aderência ${M.semel}% — revisar cadastro/foto do condutor, vigência e posição da lente${M.placas?' (placa '+M.placas+')':''}; validar leitura com a Trimble.`});
   if(M.condDiv>0) acoes.push({ic:'🪪',t:'Corrigir vínculo condutor × placa',d:`Câmera reconheceu outro condutor em ${M.condDiv} dia(s) — acertar a escala/atribuição da viagem no TMS.`});
   if(M.ddRealTotal>=120) acoes.push({ic:'🕵️',t:'Apurar uso fora da jornada',d:`${hDec(M.ddRealTotal)} de movimento fora do ponto — apurar com o motorista e registrar justificativa/autorização.`});
-  else if(M.ddRealTotal>0) acoes.push({ic:'🕵️',t:'Checar dedo duro',d:`${hDec(M.ddRealTotal)} fora do ponto — confirmar se foi manobra/pátio ou uso indevido.`});
+  else if(M.ddRealTotal>0) acoes.push({ic:'🕵️',t:'Conferir movimento fora da jornada',d:`${hDec(M.ddRealTotal)} fora do ponto — confirmar se foi manobra/pátio ou algo a alinhar com o motorista.`});
   const alto=(M.alR.niveis&&M.alR.niveis.ALTO)||0;
   if(alto>0) acoes.push({ic:'🎓',t:'Feedback / treinamento',d:`${alto} alerta(s) de nível ALTO no período — dar feedback ao condutor e acompanhar na próxima semana.`});
   if(M.mediaR!=null && !M.medaOk) acoes.push({ic:'⛽',t:'Plano de consumo',d:`Média ${nf(M.mediaR)} < meta ${nf(M.metaFicha)} — orientar direção econômica e comparar na próxima medição.`});
@@ -1550,7 +1553,7 @@ function planoDeAcao(M){
 function renderFicha(){
   const nome=fichaAtual; if(!nome){ $('#fichaBox').innerHTML=''; return; }
   const M=fichaMetrics(nome);
-  const {recs,d,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,op,placas,alR,totAl,tempo,litrosR,abF,mediaR,metaFicha,medaOk,reco}=M;
+  const {recs,d,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,aderJornadaVal,op,placas,alR,totAl,tempo,litrosR,abF,mediaR,metaFicha,medaOk,reco}=M;
   const fichaRisco=M.risco;
   const {weeks}=semanaAgg(RECORDS);
   const _dayF=dayFilter(); const _recsEvid=_dayF?recs.filter(r=>r.data===_dayF):recs;
@@ -1607,8 +1610,8 @@ function renderFicha(){
         <div class="lab">① Aderência (câmera)</div><div class="val tnum">${semel==null?'—':semel+'<small>%</small>'}</div><div class="sub">movimento do veículo identificado</div></div>
       <div class="card kpi"><div class="accent" style="background:${semelMot==null?'var(--muted)':(semelMot>=CFG.sem?'var(--good)':'var(--critical)')}"></div>
         <div class="lab">Aderência (motorista)</div><div class="val tnum">${semelMot==null?'—':semelMot+'<small>%</small>'}</div><div class="sub">reconhecido como ${firstName(nome)}</div></div>
-      <div class="card kpi"><div class="accent" style="background:var(--serious)"></div>
-        <div class="lab">③ Dedo duro real</div><div class="val tnum">${hDec(ddRealTotal)}</div><div class="sub">fora da jornada (com ponto)${ddTotal-ddRealTotal>60?' · +'+hDec(ddTotal-ddRealTotal)+' sem ponto':''}</div></div>
+      <div class="card kpi"><div class="accent" style="background:${ajColor(aderJornadaVal)}"></div>
+        <div class="lab">③ Aderência de jornada</div><div class="val tnum">${aderJornadaVal==null?'—':aderJornadaVal+'<small>%</small>'}</div><div class="sub">${hDec(ddRealTotal)} fora da jornada${ddTotal-ddRealTotal>60?' · +'+hDec(ddTotal-ddRealTotal)+' sem ponto':''}</div></div>
       <div class="card kpi"><div class="accent" style="background:${hexTotal>0?'var(--warning)':'var(--muted)'}"></div>
         <div class="lab">Hora extra (&gt;7h20)</div><div class="val tnum">${hDec(hexTotal)}</div><div class="sub">${diasHex} dia(s) acima da jornada</div></div>
       <div class="card kpi"><div class="accent" style="background:${(alR.niveis&&alR.niveis.ALTO)?'var(--critical)':(totAl>0?'var(--warning)':'var(--muted)')}"></div>
@@ -1618,7 +1621,7 @@ function renderFicha(){
     <div class="sec-title"><h2>Alertas</h2><span>${alertaSubt}</span></div>
     <div class="card"><div class="alert-row">${alertTiles}</div></div>
 
-    <div class="sec-title"><h2>Farol semanal — dedo duro</h2><span>semanas agrupadas por mês</span></div>
+    <div class="sec-title"><h2>Farol semanal — jornada</h2><span>semanas agrupadas por mês</span></div>
     <div class="card">${strip}</div>
 
     <div class="sec-title"><h2>Evidência — Ponto × Movimento</h2><span>${_dayF?('só o dia '+brDate(_dayF)+' · role o mouse para dar zoom (dia → horas)'):'a semana inteira · role o mouse para dar zoom (semana → dia → horas)'}</span></div>
@@ -1632,7 +1635,7 @@ function renderFicha(){
    EXPORTAR PDF — relatório visual (motorista e painel) p/ e-mail
    ============================================================ */
 const PDF_COR={verde:'#10b981',amarelo:'#f59e0b',vermelho:'#ef4444'};
-const PDF_LAB={verde:'OK',amarelo:'Atenção',vermelho:'Crítico'};
+const PDF_LAB={verde:'OK',amarelo:'Atenção',vermelho:'Prioridade'};
 function pdfEsc(s){ return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function pdfKpi(lab,val,sub,cor){ return `<div class="k"><div class="kbar" style="background:${cor}"></div><div class="klab">${lab}</div><div class="kval">${val}</div><div class="ksub">${sub||''}</div></div>`; }
 function pdfShell(titulo, sub, badge, corpo){
@@ -1686,7 +1689,7 @@ function pdfShell(titulo, sub, badge, corpo){
   </div>
   <div class="strip"></div>
   ${corpo}
-  <div class="ft"><span>Projeto Dedo Duro · Grupo Maroni · Ponto × Movimentação × Trimble</span><span>Gerado em ${now}</span></div>
+  <div class="ft"><span>Integração 360 · Grupo Maroni · Ponto × Movimentação × Trimble</span><span>Gerado em ${now}</span></div>
 </div>
 <script>window.onload=function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},400);};<\/script>
 </body></html>`;
@@ -1705,7 +1708,7 @@ function exportFichaPDF(){
     ${pdfKpi('④ Média realizada', (M.mediaR==null?'—':nf(M.mediaR)), 'meta '+nf(M.metaFicha)+(M.mediaR!=null?(M.medaOk?' ✓':' ✗'):''), M.medaOk?'#10b981':'#ef4444')}
     ${pdfKpi('① Aderência (câmera)', (M.semel==null?'—':M.semel+'<small>%</small>'), 'movimento do veículo identificado', M.semel==null?'#94a3b8':(M.semel>=CFG.sem?'#10b981':'#ef4444'))}
     ${pdfKpi('Aderência (motorista)', (M.semelMot==null?'—':M.semelMot+'<small>%</small>'), 'reconhecido como '+pdfEsc(firstName(nome)), M.semelMot==null?'#94a3b8':(M.semelMot>=CFG.sem?'#10b981':'#ef4444'))}
-    ${pdfKpi('③ Dedo duro real', hDec(M.ddRealTotal), 'fora da jornada c/ ponto', M.ddRealTotal>=120?'#ef4444':(M.ddRealTotal>0?'#f59e0b':'#10b981'))}
+    ${pdfKpi('③ Aderência de jornada', (M.aderJornadaVal==null?'—':M.aderJornadaVal+'<small>%</small>'), hDec(M.ddRealTotal)+' fora da jornada', M.aderJornadaVal==null?'#94a3b8':(M.aderJornadaVal>=90?'#10b981':M.aderJornadaVal>=70?'#f59e0b':'#ef4444'))}
     ${pdfKpi('Hora extra (&gt;7h20)', hDec(M.hexTotal), M.diasHex+' dia(s) acima', M.hexTotal>0?'#f59e0b':'#94a3b8')}
     ${pdfKpi('Alertas (total)', M.totAl.toLocaleString('pt-BR'), (alto?alto+' de nível alto':(M.alR.real?'no período':'câmera Trimble')), alto?'#ef4444':(M.totAl>0?'#f59e0b':'#94a3b8'))}
   </div>`;
@@ -1718,7 +1721,7 @@ function exportFichaPDF(){
   const reco=`<div class="reco"><b>Leitura geral: ${pdfEsc(M.reco.tit)}</b>${pdfEsc(M.reco.txt)}</div>`;
   const sub=`${M.op||'—'}${M.placas?' · '+M.placas:''} · ${M.tempo} de casa · ${periodoLabel()}`;
   const corpo=kpis+'<h2 class="sec">Pontos críticos × positivos</h2>'+pontos+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco;
-  pdfOpen(pdfShell('Dedo Duro — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
+  pdfOpen(pdfShell('Integração 360 — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
 }
 function exportPainelPDF(){
   const rows=filtered();
@@ -1733,6 +1736,7 @@ function exportPainelPDF(){
   const cobPonto=movDays?Math.round((movDays-movSemPonto)/movDays*100):null;
   const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
   const identSel=aderRecs(rows);   // ponderado pelo tempo
+  const ajP=aderJornada(rows);     // aderência de jornada (score positivo)
   let alertTot=0,alertAlto=0; if(ALERTS||BOL){ const rng=activeRange(); motSet.forEach(m=>{ const a=alertasResumo(m,rng); if(a&&a.total){ alertTot+=a.total; if(a.niveis&&a.niveis.ALTO)alertAlto++; } }); }
   // placas OK × ação
   let placOk=null,placAcao=null,placZero=null;
@@ -1750,7 +1754,7 @@ function exportPainelPDF(){
   const opSel=$('#fOp').value;
   let kg=`<div class="kgrid p6">
     ${pdfKpi('① Identificação'+(opSel?' · '+pdfEsc(opSel):''), (identSel==null?'—':identSel+'<small>%</small>'), 'aderência da câmera', identSel==null?'#94a3b8':(identSel>=CFG.sem?'#10b981':'#ef4444'))}
-    ${pdfKpi('③ Dedo duro real', hDec(dedo), motsDedo+' motorista(s)', '#f97316')}
+    ${pdfKpi('③ Aderência de jornada', (ajP==null?'—':ajP+'<small>%</small>'), hDec(dedo)+' fora da jornada · '+motsDedo+' mot.', ajP==null?'#94a3b8':(ajP>=90?'#10b981':ajP>=70?'#f59e0b':'#ef4444'))}
     ${pdfKpi('Cobertura de ponto', (cobPonto==null?'—':cobPonto+'<small>%</small>'), 'dias c/ mov. que têm ponto', cobPonto==null?'#94a3b8':(cobPonto>=90?'#10b981':cobPonto>=70?'#f59e0b':'#ef4444'))}
     ${pdfKpi('Movimento sem ponto', movSemPonto, 'dirigiu e não bateu ponto', '#ef4444')}
     ${pdfKpi('Ponto sem movimento', pontoSemMov, 'bateu ponto e não dirigiu', '#f59e0b')}
@@ -1770,25 +1774,25 @@ function exportPainelPDF(){
     </div>`;
 
   const critTab = criticos.length ? `<h2 class="sec">Motoristas críticos — priorizar</h2>
-    <table><thead><tr><th>Motorista</th><th>Operação</th><th>Ident.</th><th>Dedo duro</th><th>Sinais</th></tr></thead><tbody>
+    <table><thead><tr><th>Motorista</th><th>Operação</th><th>Ident.</th><th>Fora da jornada</th><th>Sinais</th></tr></thead><tbody>
     ${criticos.map(m=>`<tr><td><span class="dot" style="background:${PDF_COR[m.risco.cls]}"></span>${pdfEsc(firstName(m.nome))}</td><td>${pdfEsc(m.op)}</td><td>${m.ident==null?'—':m.ident+'%'}</td><td>${hDec(m.ddReal)}</td><td style="font-size:11px;color:#475569">${pdfEsc(m.risco.reasons.join(' · ')||'—')}</td></tr>`).join('')}
     </tbody></table>` : '<h2 class="sec">Motoristas críticos</h2><div style="font-size:12.5px;color:#059669">Nenhum motorista em situação crítica no filtro atual. ✔️</div>';
 
   const opTab = opAder.length ? `<h2 class="sec">Aderência por operação</h2>
-    <table><thead><tr><th>Operação</th><th>Aderência</th><th>Motoristas</th><th>Dedo duro</th></tr></thead><tbody>
+    <table><thead><tr><th>Operação</th><th>Aderência</th><th>Motoristas</th><th>Fora da jornada</th></tr></thead><tbody>
     ${opAder.map(o=>`<tr><td><span class="dot" style="background:${o.ader==null?'#94a3b8':(o.ader>=CFG.sem?'#10b981':o.ader>=CFG.farolAmareloMax?'#f59e0b':'#ef4444')}"></span>${pdfEsc(o.op)}</td><td><b>${o.ader==null?'—':o.ader+'%'}</b></td><td>${o.mots}</td><td>${hDec(o.dd)}</td></tr>`).join('')}
     </tbody></table>` : '';
 
   const sub=`${periodoLabel()}${opSel?' · Operação: '+opSel:''} · ${motSet.length} motorista(s) · ${rows.length} registro(s)`;
   const corpo=kg+farol+critTab+opTab;
   const critCls = cnt.vermelho>0?'vermelho':(cnt.amarelo>0?'amarelo':'verde');
-  pdfOpen(pdfShell('Dedo Duro — Painel Executivo', sub, {txt:PDF_LAB[critCls], cor:PDF_COR[critCls], extra:cnt.vermelho+' crítico(s)'}, corpo));
+  pdfOpen(pdfShell('Integração 360 — Painel Executivo', sub, {txt:PDF_LAB[critCls], cor:PDF_COR[critCls], extra:cnt.vermelho+' prioridade(s)'}, corpo));
 }
 
 /* ============================================================
    RENDER — DIVERGÊNCIAS
    ============================================================ */
-const DIV_TIPOS={mov_sem_ponto:'Movimento sem registro de ponto', id_diverg:'Identificação divergente (câmera)', condutor_nao_vinc:'Condutor não vinculado à placa', dedo_duro:'Dedo duro (fora da jornada)', hora_extra:'Hora extra (>7h20)', almoco_dirigido:'Conduziu no almoço', sem_pausa:'Jornada sem intervalo de almoço', mov_antes_entrada:'Movimento antes da entrada', semelhanca_baixa:'Semelhança facial baixa', sem_mov:'Praticamente sem movimento', mov_nao_enc:'Movimentação não encontrada', id_nao_enc:'Identificação não encontrada'};
+const DIV_TIPOS={mov_sem_ponto:'Movimento sem registro de ponto', id_diverg:'Identificação divergente (câmera)', condutor_nao_vinc:'Condutor não vinculado à placa', dedo_duro:'Fora da jornada', hora_extra:'Hora extra (>7h20)', almoco_dirigido:'Conduziu no almoço', sem_pausa:'Jornada sem intervalo de almoço', mov_antes_entrada:'Movimento antes da entrada', semelhanca_baixa:'Semelhança facial baixa', sem_mov:'Praticamente sem movimento', mov_nao_enc:'Movimentação não encontrada', id_nao_enc:'Identificação não encontrada'};
 function tipoDivKey(f){ return f.k || norm(String(f.t||'').replace(/[:(].*$/,'')); }
 function tipoDivLabel(k){ return DIV_TIPOS[k] || k; }
 function renderDiverg(rows){
@@ -1808,7 +1812,7 @@ function renderDiverg(rows){
   const motDias=new Set(items.map(it=>it.r.motoristaEscala+'|'+it.r.data)).size;
   $('#divCount').textContent = items.length.toLocaleString('pt-BR')+' apontamento'+(items.length!==1?'s':'')+' em '+motDias.toLocaleString('pt-BR')+' motorista-dia'+(motDias!==1?'s':'')+(tipoSel?' · '+tipoDivLabel(tipoSel):'');
   $('#badgeDiv').textContent = div.length>999?'999+':div.length;
-  if(!items.length){ $('#divList').innerHTML='<div class="empty">Nenhuma divergência'+(tipoSel?' do tipo <b>'+tipoDivLabel(tipoSel)+'</b>':'')+' no filtro atual. ✔️</div>'; return; }
+  if(!items.length){ $('#divList').innerHTML='<div class="empty">Nenhum ponto de atenção'+(tipoSel?' do tipo <b>'+tipoDivLabel(tipoSel)+'</b>':'')+' no filtro atual. ✔️</div>'; return; }
   const CAP=250, shown=items.slice(0,CAP);
   $('#divList').innerHTML = shown.map(({r,f})=>`
     <div class="card divcard" data-mot="${encodeURIComponent(r.motoristaEscala)}" data-dia="${r.data}" title="ver na linha do tempo" style="display:flex;gap:14px;align-items:center;padding:13px 16px;cursor:pointer">
@@ -1984,7 +1988,7 @@ function renderAderencia(rows){
       <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:32px;font-weight:760;letter-spacing:-.02em;color:${cor}">${g.ident==null?'—':g.ident+'%'}</span><span style="font-size:11px;color:var(--muted)">aderência</span></div>
       <div style="height:8px;background:var(--surface-2);border-radius:5px;overflow:hidden;margin:8px 0 4px"><div style="height:100%;width:${g.ident||0}%;background:${cor}"></div></div>
       <div class="cap-metrics">
-        <div class="cm"><span>Dedo duro</span><b class="${g.dd>0?'bad':''}">${g.dd>0?hDec(g.dd):'0h'}</b></div>
+        <div class="cm"><span>Fora da jornada</span><b class="${g.dd>0?'bad':''}">${g.dd>0?hDec(g.dd):'0h'}</b></div>
         <div class="cm"><span>Hora extra</span><b class="${g.hex>0?'bad':''}">${g.hex>0?hDec(g.hex):'0h'}</b></div>
       </div>
       ${chip}
@@ -2251,9 +2255,12 @@ function aderRecs(recs){ let idn=0,tot=0; (recs||[]).forEach(r=>{ const arr=(r.p
   if(tot>0) return Math.round(idn/tot*100);
   let s=0,n=0; (recs||[]).forEach(r=>{ if(r.semelhanca!=null){ s+=r.semelhanca; n++; } }); return n?Math.round(s/n):null; }   // fallback demo (sem movimentação)
 // aderência DO MOTORISTA: min reconhecidos COMO ELE ÷ min de movimento do veículo nos dias dele (a da câmera conta qualquer condutor)
-function aderMotoristaRecs(recs){ let meu=0,tot=0; (recs||[]).forEach(r=>{ meu+=Math.round((r.horasMov||0)*60); const arr=(r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[]); arr.forEach(p=>{ const pk=placaKey(p)+'|'+r.data; if(MOV_TOT[pk]) tot+=MOV_TOT[pk]; }); });
+function aderMotoristaRecs(recs){ let meu=0,tot=0; (recs||[]).forEach(r=>{ meu+=(r.horasMov||0); const arr=(r.placas&&r.placas.length)?r.placas:(r.placa?[r.placa]:[]); arr.forEach(p=>{ const pk=placaKey(p)+'|'+r.data; if(MOV_TOT[pk]) tot+=MOV_TOT[pk]; }); });
   if(tot>0) return Math.min(100,Math.round(meu/tot*100));
   let s=0,n=0; (recs||[]).forEach(r=>{ if(r.semelhanca!=null){ s+=r.semelhanca; n++; } }); return n?Math.round(s/n):null; }
+// ADERÊNCIA DE JORNADA (score positivo): % da condução que ocorreu DENTRO da janela do ponto (100% = jornada certinha)
+function aderJornada(recs){ let cond=0,fora=0; (recs||[]).forEach(r=>{ if(r.punches&&r.punches.length){ cond+=(r.horasMov||0); fora+=(r.ddReal||0); } }); return cond>0? Math.max(0,Math.round((cond-fora)/cond*100)) : null; }
+function ajColor(v){ return v==null?'var(--muted)':(v>=90?'var(--good)':(v>=70?'var(--warning)':'var(--critical)')); }
 // JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia)
 function parseJornada(P){
   const ponto={}, roster=new Set(), opBy={};
