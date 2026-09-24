@@ -1098,7 +1098,8 @@ function renderKpis(rows){
       : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)',tab:'media'},
     {lab:'Horas extras (&gt;7h20)',val:hDec(hex),sub:motsHex+' motorista(s) acima da jornada',ac:hex>0?'var(--warning)':'var(--muted)',tab:'tabela'},
   ];
-  if(placOk!=null){ K.splice(1,0,
+  if(placOk!=null){ const placTot=placOk+placAcao; K.splice(1,0,
+    {lab:'Placas (total)'+(opSel?' — '+opSel:''),val:placTot,sub:'veículos c/ movimento'+(opSel?' na operação':' na frota'),ac:'var(--s2)',tab:'semid'},
     {lab:'Placas OK (câmera)',val:placOk,sub:'identificando dentro do mínimo',ac:'var(--good)',tab:'semid'},
     {lab:'Placas p/ ação',val:placAcao,sub:(placZero?placZero+' sem NENHUMA ID · ':'')+'equipamento/sistêmico',ac:placAcao?'var(--critical)':'var(--good)',tab:'semid'}
   ); }
