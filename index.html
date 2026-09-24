@@ -391,8 +391,8 @@
       <option value="">Todas</option>
       <option value="critico">Prioridade</option>
       <option value="atencao">Atenção</option>
-      <option value="pendente">Pendência</option>
-      <option value="conforme">Conforme</option>
+      <option value="pendente">A conferir</option>
+      <option value="conforme">Tudo certo</option>
     </select></div>
     <div class="f" style="flex:1;min-width:170px"><label>Busca (nome / placa)</label><input type="text" id="fBusca" placeholder="Filtrar…"></div>
     <button class="btn" id="clearFilters" style="color:var(--ink);background:var(--surface);border-color:var(--border)">Limpar</button>
@@ -675,10 +675,10 @@ function brDate(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); ret
 function firstName(n){ return String(n||'').trim().split(/\s+/).slice(0,2).join(' '); }
 // nº da semana ISO (ex.: "S37") — usado no rollup semanal "Capivara"
 function isoWeek(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return ''; const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3])); const day=(d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-day+3); const t=d.getTime(); d.setUTCMonth(0,1); if(d.getUTCDay()!==4) d.setUTCMonth(0,1+((4-d.getUTCDay())+7)%7); const w=1+Math.round((t-d.getTime())/6048e5); return 'S'+String(w).padStart(2,'0'); }
-// farol do dedo duro por horas (min): verde=sem horas · amarelo=até limite · vermelho=acima
+// farol de fora da jornada por horas (min): verde=sem horas · amarelo=até limite · vermelho=acima
 function farol(min){ if(min<=0) return 'verde'; if(min<=CFG.farolAmareloMax) return 'amarelo'; return 'vermelho'; }
 const FAROL_COR={verde:'var(--good)',amarelo:'var(--warning)',vermelho:'var(--critical)'};
-const SEV_LABEL={conforme:'Conforme',atencao:'Atenção',critico:'Prioridade',pendente:'Pendência'};
+const SEV_LABEL={conforme:'Tudo certo',atencao:'Atenção',critico:'Prioridade',pendente:'A conferir'};
 const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 // info da semana ISO: chave ordenável (segunda), rótulo (S37) e o mês a que pertence (quinta da semana)
 function weekInfo(iso){
@@ -962,24 +962,24 @@ function analyze(rec){
   if(BASES.mov && mov.length===0 && hasPonto) flags.push({sev:'pendente',k:'mov_nao_enc',t:'Movimentação do veículo não encontrada'});
   if(BASES.trim && semSegs && (hasPonto||hasMov)) flags.push({sev:'pendente',k:'id_nao_enc',t:'Identificação Trimble não encontrada'});
   // DIVERGÊNCIAS reais
-  if(BASES.ponto && BASES.mov && hasMov && !hasPonto) flags.push({sev:'critico',k:'mov_sem_ponto',t:'Movimento sem registro de ponto'});
+  if(BASES.ponto && BASES.mov && hasMov && !hasPonto) flags.push({sev:'critico',k:'mov_sem_ponto',t:'Ponto a registrar (veículo rodou sem ponto no dia)'});
   if(BASES.ponto && BASES.mov && hasPonto && mov.length && horasMov<movMin) flags.push({sev:'atencao',k:'sem_mov',t:'Veículo praticamente sem movimento'});
-  if(BASES.trim && trimbleMot && norm(trimbleMot)!==norm(rec.motoristaEscala)) flags.push({sev:'critico',k:'id_diverg',t:'Identificação divergente — câmera reconheceu '+firstName(trimbleMot)});
-  if(BASES.trim && semelhanca!=null && semelhanca<CFG.sem) flags.push({sev:'atencao',k:'semelhanca_baixa',t:'Semelhança facial baixa ('+semelhanca+'%)'});
-  if(BASES.ponto && BASES.mov && foraJornada>CFG.fora) flags.push({sev:'atencao',k:'dedo_duro',t:'Fora da jornada: '+hm(foraJornada)+' de condução fora do ponto'});
-  if(BASES.ponto && BASES.mov && hasPonto && primMov!=null && primMov < entrada-tol) flags.push({sev:'atencao',k:'mov_antes_entrada',t:'Veículo em movimento antes da entrada'});
+  if(BASES.trim && trimbleMot && norm(trimbleMot)!==norm(rec.motoristaEscala)) flags.push({sev:'critico',k:'id_diverg',t:'Condutor a confirmar — câmera reconheceu '+firstName(trimbleMot)});
+  if(BASES.trim && semelhanca!=null && semelhanca<CFG.sem) flags.push({sev:'atencao',k:'semelhanca_baixa',t:'Cadastro facial a revisar (semelhança '+semelhanca+'%)'});
+  if(BASES.ponto && BASES.mov && foraJornada>CFG.fora) flags.push({sev:'atencao',k:'dedo_duro',t:'Condução fora do horário do ponto ('+hm(foraJornada)+')'});
+  if(BASES.ponto && BASES.mov && hasPonto && primMov!=null && primMov < entrada-tol) flags.push({sev:'atencao',k:'mov_antes_entrada',t:'Início antes de bater a entrada'});
   // ALMOÇO
-  if(BASES.ponto && BASES.mov && almocoDirigido>=10) flags.push({sev:'atencao',k:'almoco_dirigido',t:'Marcou almoço mas conduziu na pausa ('+hm(almocoDirigido)+')'});
-  if(BASES.ponto && BASES.mov && semPausa && hasMov) flags.push({sev:'atencao',k:'sem_pausa',t:'Jornada sem intervalo de almoço (seguiu direto)'});
+  if(BASES.ponto && BASES.mov && almocoDirigido>=10) flags.push({sev:'atencao',k:'almoco_dirigido',t:'Pausa de almoço a conferir (conduziu '+hm(almocoDirigido)+' no intervalo)'});
+  if(BASES.ponto && BASES.mov && semPausa && hasMov) flags.push({sev:'atencao',k:'sem_pausa',t:'Sem pausa de almoço registrada (seguiu direto)'});
   // HORA EXTRA (jornada acima de 7h20)
-  if(BASES.ponto && horaExtra>0) flags.push({sev:'atencao',k:'hora_extra',t:'Hora extra: '+hm(horaExtra)+' acima de 7h20 de jornada'});
+  if(BASES.ponto && horaExtra>0) flags.push({sev:'atencao',k:'hora_extra',t:'Jornada além de 7h20 ('+hm(horaExtra)+' extra)'});
   // CONDUTOR NÃO VINCULADO À PLACA (pedido) — quem foi identificado dirigindo ≠ quem estava no pedido
   let plannedCpf='';
   if(typeof PED_DRV!=='undefined' && PED_DRV){ for(const p of placasR){ const cf=PED_DRV[placaKey(p)+'|'+rec.data]; if(cf){ plannedCpf=cf; break; } } }
   const idCpf = (typeof NOME2CPF!=='undefined' && NOME2CPF) ? NOME2CPF[norm(rec.motoristaEscala)] : '';
   let condutorDivergente=false, condutorPlan='';
   if(plannedCpf && idCpf && plannedCpf!==idCpf){ condutorDivergente=true; condutorPlan=(typeof CPF2NOME!=='undefined'&&CPF2NOME&&CPF2NOME[plannedCpf])||('CPF '+plannedCpf); }
-  if(condutorDivergente && hasMov) flags.push({sev:'critico',k:'condutor_nao_vinc',t:'Condutor não vinculado à placa — pedido previa '+firstName(condutorPlan)});
+  if(condutorDivergente && hasMov) flags.push({sev:'critico',k:'condutor_nao_vinc',t:'Vínculo condutor × placa a confirmar — pedido previa '+firstName(condutorPlan)});
 
   let sev = flags.some(f=>f.sev==='critico') ? 'critico'
           : flags.some(f=>f.sev==='atencao') ? 'atencao'
@@ -988,14 +988,14 @@ function analyze(rec){
 
   const wi = weekInfo(rec.data);
 
-  // --- HORAS DEDO DURO = movimento não declarado no ponto ---
-  // com ponto: horas fora da janela batida; movimento sem ponto: 100% do movimento é dedo duro
+  // --- HORAS FORA DA JORNADA = movimento não declarado no ponto ---
+  // com ponto: horas fora da janela batida; movimento sem ponto: 100% do movimento fica fora da jornada
   let horasDedoDuro=0;
   if(BASES.ponto && BASES.mov){
     if(hasPonto) horasDedoDuro=foraJornada;
     else if(hasMov) horasDedoDuro=horasMov;
   }
-  // dedo duro REAL = movimento fora da janela QUANDO há ponto (o "movimento sem ponto" é pendência, não infla o farol)
+  // fora da jornada REAL = movimento fora da janela QUANDO há ponto (o "movimento sem ponto" é pendência, não infla o farol)
   const ddReal = (BASES.ponto && BASES.mov && hasPonto) ? foraJornada : 0;
 
   return Object.assign({}, rec, {
@@ -1007,7 +1007,7 @@ function analyze(rec){
     almocoDrivenSegs, almocoDirigido, semPausa, lunch,
     movAusente: BASES.mov && mov.length===0,
     idAusente: BASES.trim && semSegs,
-    idDivergente: flags.some(f=>f.t.startsWith('Identificação divergente')),
+    idDivergente: flags.some(f=>f.k==='id_diverg'),
     _key: operacao+'|'+rec.data+'|'+rec.placa+'|'+rec.motoristaEscala
   });
 }
@@ -1135,7 +1135,7 @@ function semanaAgg(rows){
     const mots={};
     opRows.forEach(r=>{ const m=(mots[r.motoristaEscala]=mots[r.motoristaEscala]||{nome:r.motoristaEscala,placa:'',dd:0,ddReal:0,dias:0,mov:0,ponto:0,km:0,litros:0,semanas:{},semelSum:0,semelN:0,recs:[],idDiv:0,pend:0});
       m.dd+=r.horasDedoDuro; m.ddReal+=(r.ddReal||0); if(r.horasDedoDuro>0)m.dias++; m.mov+=r.horasMov; m.ponto+=r.horasPonto; m.km+=r.km||0; m.litros+=r.litros||0; if(r.placa)m.placa=r.placa;
-      m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+(r.ddReal||0);   // farol semanal = dedo duro REAL (fora da jornada com ponto)
+      m.semanas[r.semKey]=(m.semanas[r.semKey]||0)+(r.ddReal||0);   // farol semanal = fora da jornada REAL (com ponto)
       if(r.semelhanca!=null){ m.semelSum+=r.semelhanca; m.semelN++; }
       m.recs.push(r);
       if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
@@ -1462,10 +1462,10 @@ function recomendacao(anosMeses, media, totAl, dd){
   const boaMedia = media!=null && media>=CFG.meta;
   const poucosAlertas = totAl<=2;
   if(anos>=2 && boaMedia && poucosAlertas)
-    return {cls:'manter',tit:'Perfil sólido — evento atípico pode ser relevado',txt:`${anosMeses} de casa, média ${media.toFixed(2).replace('.',',')} (≥ meta) e poucos alertas. Uma ocorrência isolada tende a ser exceção.`};
+    return {cls:'manter',tit:'Perfil sólido — segue assim!',txt:`${anosMeses} de casa, média ${media.toFixed(2).replace('.',',')} (≥ meta) e poucos alertas. Uma ocorrência isolada tende a ser exceção.`};
   if((media!=null && media<CFG.meta) && (totAl>=5 || (drv(fichaAtual).alertas.celular||0)>=5))
     return {cls:'questionar',tit:'Vale uma conversa de apoio',txt:`Média ${media!=null?media.toFixed(2).replace('.',','):'—'} (< meta), ${totAl} alertas${(drv(fichaAtual).alertas.celular||0)>=5?' (uso alto de celular)':''}${dd>0?' e '+hDec(dd)+' fora da jornada':''}. Conversar com o motorista e combinar um plano de melhoria.`};
-  return {cls:'observar',tit:'Observar — manter plano de ação',txt:`Indicadores intermediários. Registrar causa-raiz e a ação da semana; comparar na próxima.`};
+  return {cls:'observar',tit:'Seguir acompanhando',txt:`Indicadores intermediários. Registrar a causa e a ação da semana; comparar na próxima.`};
 }
 // rótulo amigável do período ativo (usado nos relatórios em PDF)
 function periodoLabel(){
@@ -1486,7 +1486,7 @@ function fichaMetrics(nome){
     if(_stt && r.sev!==_stt) return false;
     return true; });
   const d=drv(nome);
-  const porSemana={}; recs.forEach(r=>porSemana[r.semKey]=(porSemana[r.semKey]||0)+(r.ddReal||0));  // farol semanal = dedo duro real
+  const porSemana={}; recs.forEach(r=>porSemana[r.semKey]=(porSemana[r.semKey]||0)+(r.ddReal||0));  // farol semanal = fora da jornada real
   const ddTotal=recs.reduce((a,r)=>a+r.horasDedoDuro,0);
   const ddRealTotal=recs.reduce((a,r)=>a+(r.ddReal||0),0);
   const hexTotal=recs.reduce((a,r)=>a+(r.horaExtra||0),0);
@@ -1594,10 +1594,10 @@ function renderFicha(){
     </div>
     ${noteOps}
 
-    <div class="sec-title"><h2>Pontos críticos × positivos</h2><span>${periodoLabel()} · resumo executivo (o mesmo do PDF)</span></div>
+    <div class="sec-title"><h2>Pontos de atenção × pontos fortes</h2><span>${periodoLabel()} · resumo executivo (o mesmo do PDF)</span></div>
     <div class="pontos">
-      <div class="card pontos-col crit"><div class="pt-h">⚠️ Pontos críticos</div><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
-      <div class="card pontos-col pos"><div class="pt-h">✅ Pontos positivos</div><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
+      <div class="card pontos-col crit"><div class="pt-h">⚠️ Pontos de atenção</div><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
+      <div class="card pontos-col pos"><div class="pt-h">✅ Pontos fortes</div><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
     </div>
 
     <div class="sec-title"><h2>Plano de ação</h2><span>o que fazer com base nos sinais do período</span></div>
@@ -1713,14 +1713,14 @@ function exportFichaPDF(){
     ${pdfKpi('Alertas (total)', M.totAl.toLocaleString('pt-BR'), (alto?alto+' de nível alto':(M.alR.real?'no período':'câmera Trimble')), alto?'#ef4444':(M.totAl>0?'#f59e0b':'#94a3b8'))}
   </div>`;
   const pontos=`<div class="cols">
-    <div class="col crit"><h3>⚠️ Pontos críticos</h3><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
-    <div class="col pos"><h3>✅ Pontos positivos</h3><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
+    <div class="col crit"><h3>⚠️ Pontos de atenção</h3><ul>${P.crit.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
+    <div class="col pos"><h3>✅ Pontos fortes</h3><ul>${P.pos.map(t=>'<li>'+t+'</li>').join('')}</ul></div>
   </div>`;
   const PL=planoDeAcao(M);
   const plano=`<ul class="plan">${PL.map(a=>`<li><span>${a.ic}</span><div><b>${pdfEsc(a.t)}</b> — ${pdfEsc(a.d)}</div></li>`).join('')}</ul>`;
   const reco=`<div class="reco"><b>Leitura geral: ${pdfEsc(M.reco.tit)}</b>${pdfEsc(M.reco.txt)}</div>`;
   const sub=`${M.op||'—'}${M.placas?' · '+M.placas:''} · ${M.tempo} de casa · ${periodoLabel()}`;
-  const corpo=kpis+'<h2 class="sec">Pontos críticos × positivos</h2>'+pontos+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco;
+  const corpo=kpis+'<h2 class="sec">Pontos de atenção × pontos fortes</h2>'+pontos+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco;
   pdfOpen(pdfShell('Integração 360 — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
 }
 function exportPainelPDF(){
@@ -1792,7 +1792,7 @@ function exportPainelPDF(){
 /* ============================================================
    RENDER — DIVERGÊNCIAS
    ============================================================ */
-const DIV_TIPOS={mov_sem_ponto:'Movimento sem registro de ponto', id_diverg:'Identificação divergente (câmera)', condutor_nao_vinc:'Condutor não vinculado à placa', dedo_duro:'Fora da jornada', hora_extra:'Hora extra (>7h20)', almoco_dirigido:'Conduziu no almoço', sem_pausa:'Jornada sem intervalo de almoço', mov_antes_entrada:'Movimento antes da entrada', semelhanca_baixa:'Semelhança facial baixa', sem_mov:'Praticamente sem movimento', mov_nao_enc:'Movimentação não encontrada', id_nao_enc:'Identificação não encontrada'};
+const DIV_TIPOS={mov_sem_ponto:'Ponto a registrar', id_diverg:'Condutor a confirmar', condutor_nao_vinc:'Vínculo condutor × placa a confirmar', dedo_duro:'Condução fora do horário do ponto', hora_extra:'Jornada além de 7h20', almoco_dirigido:'Pausa de almoço a conferir', sem_pausa:'Sem pausa de almoço registrada', mov_antes_entrada:'Início antes de bater a entrada', semelhanca_baixa:'Cadastro facial a revisar', sem_mov:'Praticamente sem movimento', mov_nao_enc:'Movimentação não encontrada', id_nao_enc:'Identificação não encontrada'};
 function tipoDivKey(f){ return f.k || norm(String(f.t||'').replace(/[:(].*$/,'')); }
 function tipoDivLabel(k){ return DIV_TIPOS[k] || k; }
 function renderDiverg(rows){
@@ -2702,7 +2702,7 @@ function updateDropStatus(){
    ============================================================ */
 function exportCsv(){
   const rows=filtered();
-  const head=['Operacao','Dia','Motorista','Veiculos','Ponto_entrada','Ponto_saida','Horas_ponto','Direcao_inicio','Direcao_fim','Horas_conducao','Hora_extra_min','Km','Dedo_duro_min','Situacao','Apontamentos'];
+  const head=['Operacao','Dia','Motorista','Veiculos','Ponto_entrada','Ponto_saida','Horas_ponto','Direcao_inicio','Direcao_fim','Horas_conducao','Hora_extra_min','Km','Fora_jornada_min','Situacao','Apontamentos'];
   const lines=[head.join(';')];
   rows.forEach(r=>lines.push([
     r.operacao,brDate(r.data),r.motoristaEscala,'"'+((r.placas&&r.placas.join(', '))||r.placa||'')+'"',
@@ -2716,13 +2716,13 @@ function exportCsv(){
 }
 function exportSemana(){
   const {weeks,data}=semanaAgg(filtered());
-  const head=['Operacao','Motorista','Horas_dedo_duro','Dias_com_DD','Horas_ponto','Horas_movimento'].concat(weeks.map(w=>'Farol_'+w.mesLabel+'_'+w.label));
+  const head=['Operacao','Motorista','Horas_fora_jornada','Dias_fora_jornada','Horas_ponto','Horas_movimento'].concat(weeks.map(w=>'Farol_'+w.mesLabel+'_'+w.label));
   const lines=[head.join(';')];
   data.forEach(g=>g.list.forEach(m=>{
     const far=weeks.map(w=> (w.key in m.semanas)?farol(m.semanas[w.key]):'');
     lines.push([g.op,m.nome,(m.dd/60).toFixed(2),m.dias,(m.ponto/60).toFixed(2),(m.mov/60).toFixed(2)].concat(far).join(';'));
   }));
-  baixarCsv(lines,'resumo_semanal_dedo_duro.csv');
+  baixarCsv(lines,'resumo_semanal_integracao360.csv');
 }
 function baixarCsv(lines,nome){
   const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
