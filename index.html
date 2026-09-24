@@ -360,6 +360,7 @@
     </div>
     <div class="head-tools">
       <span class="pill" id="dataModePill"><span class="dot"></span> <b id="dataModeTxt">dados de demonstração</b></span>
+      <button class="btn" id="spBtn" title="Entrar com Microsoft e atualizar os dados a partir da pasta do SharePoint">☁️ Atualizar do SharePoint</button>
       <button class="btn" id="themeBtn" title="Alternar tema">🌗 Tema</button>
       <button class="btn" id="printBtn" title="Gerar relatório executivo do painel em PDF (respeita os filtros)">📄 Relatório PDF</button>
     </div>
@@ -653,6 +654,8 @@
 <!-- SheetJS (para .xlsx) e JSZip (para o .zip). Carregam em 2º plano (defer) p/ a página abrir rápido; CSV funciona sem internet. -->
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- MSAL (login Microsoft/M365) para ler os relatórios do SharePoint via Graph -->
+<script defer src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js"></script>
 <script>
 /* ============================================================
    LOGO MARONI (rinoceronte) — embutido
@@ -2761,6 +2764,95 @@ function baixarCsv(lines,nome){
 }
 
 /* ============================================================
+   SHAREPOINT (Microsoft Graph) — lê os relatórios da pasta e atualiza o painel
+   login M365 (SSO); Client/Tenant ID são identificadores públicos (sem segredo)
+   ============================================================ */
+const SP_CFG = {
+  clientId:'736fd862-1429-4cfd-951c-11bfa7832fe8',
+  tenantId:'8babaf2b-248f-4651-98d6-1e5312fbe00a',
+  redirectUri:'https://maronitechdevelopers.github.io/integracao-360/',
+  siteHost:'grupotransmaroni.sharepoint.com',
+  sitePath:'/sites/gestao.desenvolvimento',
+  folder:'Relatório Integração 360',
+  scopes:['Sites.Read.All','User.Read']
+};
+let _msal=null;
+function spMsal(){
+  if(_msal) return _msal;
+  if(typeof msal==='undefined') throw new Error('MSAL não carregou (sem internet?)');
+  _msal=new msal.PublicClientApplication({ auth:{ clientId:SP_CFG.clientId, authority:'https://login.microsoftonline.com/'+SP_CFG.tenantId, redirectUri:SP_CFG.redirectUri }, cache:{ cacheLocation:'localStorage' } });
+  return _msal;
+}
+async function spToken(interactive){
+  const pca=spMsal(); if(pca.initialize) await pca.initialize();
+  const req={ scopes:SP_CFG.scopes.map(s=>'https://graph.microsoft.com/'+s) };
+  const acc=pca.getAllAccounts()[0];
+  if(acc){ try{ const r=await pca.acquireTokenSilent(Object.assign({account:acc},req)); return r.accessToken; }catch(e){} }
+  if(!interactive) return null;
+  const r=await pca.acquireTokenPopup(req); return r.accessToken;
+}
+async function gget(path, token){
+  const r=await fetch('https://graph.microsoft.com/v1.0'+path,{ headers:{ Authorization:'Bearer '+token } });
+  if(!r.ok){ const t=await r.text().catch(()=>''); throw new Error('Graph '+r.status+(t?': '+t.slice(0,180):'')); }
+  return r.json();
+}
+async function spHead(url){ try{ const buf=await fetch(url).then(r=>r.arrayBuffer()); const txt=decodeText(buf); const nl=txt.indexOf('\n'); return norm(nl<0?txt:txt.slice(0,nl)); }catch(e){ return ''; } }
+function detectTipo(name, header, ext){
+  const n=norm(name), h=header||'';
+  if(ext==='xlsx'||ext==='xls'){ if(/ABASTEC/.test(n)) return 'abast'; if(/MEDIA|META/.test(n)) return 'metas'; if(/CAVALO|CAMERA|SAUDE|\bCAM\b/.test(n)) return 'saude'; return null; }
+  if(ext==='zip') return 'mov';
+  if(h.includes('ENTRADA 1')||h.includes('SAIDA 1')) return 'jornada';
+  if(h.includes('SEM MOTORISTA')&&h.includes('PLACA')) return 'bdv';
+  if(h.includes('DATA ADMISSAO')) return 'motoristas';
+  if(h.includes('OCORRENCIA')||h.includes('DATA/HORA INICIAL')||h.includes('DATA HORA INICIAL')) return 'mov';
+  if(h.includes('CPF MOTORISTAS')&&h.includes('DATA CARREGAMENTO')) return 'pedidos';
+  if(h.includes('CENTRO RESULTADO')&&h.includes('RENAVAM')) return 'tms';
+  if((h.includes('TIPO')&&h.includes('NIVEL'))||h.includes('EXCESSO DE VELOCIDADE')) return 'alertas';
+  if(h.includes('MOTORISTA')&&h.includes('CPF')&&(h.includes('VEICULOS')||h.includes('MEDIA CONSUMO'))) return 'boletim';
+  return null;
+}
+function spGrab(f){ return fetch(f['@microsoft.graph.downloadUrl']).then(r=>r.arrayBuffer()).then(ab=>new File([ab], f.name)); }
+function readFileP(file){ return new Promise(res=>readFile(file,res)); }
+async function spLoadAll(interactive){
+  const setPill=t=>{ const p=$('#dataModeTxt'); if(p)p.textContent=t; };
+  let token; try{ token=await spToken(interactive); }catch(e){ toast('Login: '+(e.message||'cancelado')); return false; }
+  if(!token) return false;   // silencioso sem sessão → não faz nada
+  toast('Lendo a pasta do SharePoint…'); setPill('conectando ao SharePoint…');
+  let site, items;
+  try{
+    site=await gget('/sites/'+SP_CFG.siteHost+':'+SP_CFG.sitePath, token);
+    items=await gget('/sites/'+site.id+'/drive/root:/'+encodeURIComponent(SP_CFG.folder)+':/children?$top=200&$select=name,id,lastModifiedDateTime,file,@microsoft.graph.downloadUrl', token);
+  }catch(e){ toast('Erro no SharePoint — '+e.message); setPill('erro no SharePoint'); return false; }
+  const files=(items.value||[]).filter(f=>f.file&&f['@microsoft.graph.downloadUrl']);
+  if(!files.length){ toast('Pasta vazia (ou sem acesso)'); return false; }
+  const byType={};
+  for(const f of files){ const ext=(f.name.split('.').pop()||'').toLowerCase(); let header=''; if(ext==='csv'||ext==='txt') header=await spHead(f['@microsoft.graph.downloadUrl']);
+    const t=detectTipo(f.name, header, ext); if(!t) continue; if(!byType[t] || f.lastModifiedDateTime>byType[t].lastModifiedDateTime) byType[t]=f; }
+  const achou=Object.keys(byType);
+  if(!achou.length){ toast('Nenhum relatório reconhecido na pasta ('+files.length+' arquivo(s))'); return false; }
+  toast('Baixando '+achou.length+' relatório(s)…');
+  const blob={}; for(const t of achou){ try{ blob[t]=await spGrab(byType[t]); }catch(e){} }
+  // enriquecimentos (cada loader se reconstrói ao terminar)
+  if(blob.motoristas) loadMotoristas(blob.motoristas);
+  if(blob.alertas) loadAlertas(blob.alertas);
+  if(blob.tms) readFile(blob.tms, rows=>ingestTMS(rows));
+  if(blob.bdv) loadBoletimVeiculo(blob.bdv);
+  if(blob.boletim) loadBoletim(blob.boletim);
+  if(blob.pedidos) loadPedidos(blob.pedidos);
+  if(blob.saude) loadSaude(blob.saude);
+  if(blob.abast) loadAbastecimento(blob.abast);
+  if(blob.metas) loadMetas(blob.metas);
+  // núcleo: jornada (define o roster) + movimentação
+  if(blob.jornada){ pending.ponto=await readFileP(blob.jornada); }
+  if(blob.mov){ if(/\.zip$/i.test(blob.mov.name)) ingestMovZip(blob.mov); else { pending.mov=await readFileP(blob.mov); ingest(); } }
+  else if(blob.jornada && pending.ponto){ ingest(); }
+  setPill('dados reais · SharePoint');
+  try{ localStorage.setItem('sp_auto','1'); }catch(e){}
+  toast('SharePoint ✓ '+achou.length+' relatório(s): '+achou.join(', '));
+  return true;
+}
+
+/* ============================================================
    EVENTOS / INIT
    ============================================================ */
 // tabs
@@ -2799,6 +2891,9 @@ $('#themeBtn').onclick=()=>applyTheme(document.documentElement.getAttribute('dat
 (function(){ let t='light'; try{t=localStorage.getItem(LS.theme)||'light';}catch(e){} if(t==='dark')applyTheme('dark'); })();
 $('#printBtn').onclick=exportPainelPDF;
 $('#fichaPdf').onclick=exportFichaPDF;
+$('#spBtn').onclick=()=>spLoadAll(true);
+// auto: se já autenticou antes nesta máquina, tenta atualizar silenciosamente ao abrir
+(function(){ try{ if(localStorage.getItem('sp_auto')==='1'){ setTimeout(()=>{ if(typeof msal!=='undefined') spLoadAll(false); }, 500); } }catch(e){} })();
 // filtros
 ['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus'].forEach(s=>$(s).addEventListener('change',renderAll));
 $('#fBusca').addEventListener('input',renderAll);
