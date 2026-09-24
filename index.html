@@ -341,6 +341,25 @@
   .docs code{background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;font-size:12px}
   .empty{text-align:center;color:var(--muted);padding:50px 20px;font-size:13.5px}
 
+  /* tratativas */
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:60;align-items:center;justify-content:center;padding:20px}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:520px;padding:20px 22px}
+  .modal h3{margin:0 0 4px;font-size:16px}
+  .modal .modal-sub{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  .modal label{display:block;font-size:12px;color:var(--ink-2);font-weight:600;margin-bottom:11px}
+  .modal input,.modal select,.modal textarea{width:100%;margin-top:4px;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font:inherit;font-weight:400}
+  .modal textarea{resize:vertical}
+  .modal .modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:560px){.modal .modal-grid{grid-template-columns:1fr}}
+  .modal .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+  .tratlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+  .tratlist li{border-left:3px solid var(--gold);background:var(--surface-2);border-radius:9px;padding:10px 12px}
+  .tratlist .tt-h{font-size:13px}
+  .tratlist .tt-tipo{display:inline-block;background:color-mix(in srgb,var(--gold) 22%,transparent);color:var(--gold-2);font-weight:700;font-size:11px;padding:2px 8px;border-radius:20px;margin-right:8px}
+  .tratlist .tt-g{color:var(--muted)}
+  .tratlist .tt-o{font-size:12.5px;color:var(--ink-2);margin-top:5px;white-space:pre-wrap}
+  .tratlist .tt-s{font-size:11px;color:var(--muted);margin-top:4px}
+
   /* toast */
   #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;transition:.25s;background:var(--navy);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:50;pointer-events:none;border-left:3px solid var(--gold)}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -427,6 +446,7 @@
   <section class="view" id="view-ficha">
     <div class="ficha-actions">
       <button class="ficha-back" id="fichaBack">← Voltar ao resumo</button>
+      <button class="btn-pdf" id="btnTratativa" title="Registrar uma tratativa (conversa/ação) com o motorista">🗣️ Registrar tratativa</button>
       <button class="btn-pdf" id="fichaPdf" title="Gerar relatório visual em PDF para anexar no e-mail">📄 Exportar PDF do motorista</button>
     </div>
     <div id="fichaBox"></div>
@@ -648,6 +668,33 @@
     <span>Grupo Maroni · Integração 360 — Identificação de Condutor &amp; Média (Trimble)</span>
   </div>
 </main>
+
+<!-- Modal de tratativa -->
+<div id="tratModal" class="modal-bg">
+  <div class="modal">
+    <h3>🗣️ Registrar tratativa — <span id="tratNome"></span></h3>
+    <p class="modal-sub">Registre a conversa/ação feita com o motorista. Fica no histórico (banco compartilhado quando logado no M365).</p>
+    <div class="modal-grid">
+      <label>Data<input type="date" id="tratData"></label>
+      <label>Gestor responsável<input type="text" id="tratGestor" placeholder="seu nome"></label>
+    </div>
+    <label>Tipo de ação<select id="tratTipo">
+      <option>Conversa de orientação</option>
+      <option>Feedback positivo</option>
+      <option>Alinhamento de jornada/ponto</option>
+      <option>Treinamento</option>
+      <option>Advertência verbal</option>
+      <option>Advertência escrita</option>
+      <option>Suspensão</option>
+      <option>Outro</option>
+    </select></label>
+    <label>O que foi tratado / ação tomada<textarea id="tratObs" rows="4" placeholder="Ex.: conversei sobre uso de celular e média; combinamos meta para a próxima semana…"></textarea></label>
+    <div class="modal-actions">
+      <button class="btn" id="tratCancel" style="color:var(--ink);background:var(--surface);border-color:var(--border)">Cancelar</button>
+      <button class="btn solid" id="tratSave">Salvar tratativa</button>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -1577,6 +1624,9 @@ function renderFicha(){
   const strip=farolStripHTML(porSemana, weeks, {showHours:true});
   const P=fichaPontos(M);   // pontos críticos × positivos (mesma fonte do PDF)
   const PL=planoDeAcao(M);  // plano de ação concreto (o que fazer)
+  const trats=tratList(nome);   // histórico de tratativas (Lista SharePoint ou local)
+  // se logado no M365 e ainda não puxou o banco compartilhado, sincroniza e re-renderiza (1x)
+  if(spSignedIn() && TRAT_CACHE===null && !_tratSyncTried){ _tratSyncTried=true; tratSyncFromSP().then(ok=>{ if(ok && fichaAtual===nome) renderFicha(); }); }
   // este motorista rodou em outras operações fora do filtro atual? (evita o "só apareceu 1 dia")
   const _opFilter=$('#fOp').value;
   const allDrvRecs=RECORDS.filter(r=>r.motoristaEscala===nome);
@@ -1610,6 +1660,11 @@ function renderFicha(){
       </div>
     </div>
     ${noteOps}
+
+    <div class="sec-title"><h2>Tratativas com o motorista</h2><span>${trats.length} registro(s) · ${TRAT_CACHE?'banco compartilhado (SharePoint)':'salvo local neste navegador'}</span></div>
+    <div class="card">${ trats.length
+      ? '<ul class="tratlist">'+trats.map(t=>`<li><div class="tt-h"><span class="tt-tipo">${pdfEsc(t.tipo||'—')}</span><b>${brDate(t.data)}</b>${t.gestor?' · <span class="tt-g">'+pdfEsc(t.gestor)+'</span>':''}</div>${t.obs?'<div class="tt-o">'+pdfEsc(t.obs)+'</div>':''}${t.sinais?'<div class="tt-s">sinais na época: '+pdfEsc(t.sinais)+'</div>':''}</li>`).join('')+'</ul>'
+      : '<div class="empty" style="padding:22px">Nenhuma tratativa registrada ainda. Use o botão <b>🗣️ Registrar tratativa</b> (acima) para iniciar o acompanhamento com o motorista.</div>' }</div>
 
     <div class="sec-title"><h2>Pontos de atenção × pontos fortes</h2><span>${periodoLabel()} · resumo executivo (o mesmo do PDF)</span></div>
     <div class="pontos">
@@ -2788,7 +2843,8 @@ const SP_CFG = {
   siteHost:'grupotransmaroni.sharepoint.com',
   sitePath:'/sites/gestao.desenvolvimento',
   folder:'Relatório Integração 360',
-  scopes:['Sites.Read.All','User.Read']
+  tratList:'Tratativas Integração 360',
+  scopes:['Sites.ReadWrite.All','User.Read']   // ReadWrite: ler relatórios + gravar tratativas na Lista
 };
 let _msal=null;
 function spMsal(){
@@ -2867,6 +2923,70 @@ async function spLoadAll(interactive){
 }
 
 /* ============================================================
+   TRATATIVAS — histórico de ações do gestor com o motorista
+   banco compartilhado = Lista do SharePoint (via Graph); localStorage = reserva
+   ============================================================ */
+let TRAT_CACHE=null, SP_SITE_ID=null, SP_LIST_ID=null, _tratSyncTried=false;
+function tratLocalLoad(){ try{ return JSON.parse(localStorage.getItem('integ360_tratativas')||'{}'); }catch(e){ return {}; } }
+function tratLocalSave(m){ try{ localStorage.setItem('integ360_tratativas', JSON.stringify(m)); }catch(e){} }
+function tratKey(nome){ const nn=norm(nome); const cpf=(typeof NOME2CPF!=='undefined'&&NOME2CPF&&NOME2CPF[nn])||''; return cpf?('cpf:'+cpf):('nome:'+nn); }
+function tratList(nome){ const m=TRAT_CACHE||tratLocalLoad(); return (m[tratKey(nome)]||[]).slice().sort((a,b)=>String(b.data||'').localeCompare(String(a.data||''))); }
+function spSignedIn(){ try{ return !!(typeof msal!=='undefined' && _msal && _msal.getAllAccounts && _msal.getAllAccounts()[0]); }catch(e){ return false; } }
+function spGestor(){ try{ const a=_msal.getAllAccounts()[0]; return a?{nome:a.name||a.username||'', email:a.username||''}:{nome:'',email:''}; }catch(e){ return {nome:'',email:''}; } }
+async function gpost(path, token, body){ const r=await fetch('https://graph.microsoft.com/v1.0'+path,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!r.ok){ const t=await r.text().catch(()=>''); throw new Error('Graph '+r.status+(t?': '+t.slice(0,180):'')); } return r.json(); }
+async function spSiteId(token){ if(SP_SITE_ID) return SP_SITE_ID; const s=await gget('/sites/'+SP_CFG.siteHost+':'+SP_CFG.sitePath, token); SP_SITE_ID=s.id; return s.id; }
+async function spEnsureTratList(token){ if(SP_LIST_ID) return SP_LIST_ID; const site=await spSiteId(token);
+  const lists=await gget('/sites/'+site+'/lists?$select=id,displayName&$top=200', token);
+  const found=(lists.value||[]).find(l=>l.displayName===SP_CFG.tratList);
+  if(found){ SP_LIST_ID=found.id; return found.id; }
+  const body={ displayName:SP_CFG.tratList, list:{template:'genericList'}, columns:[
+    {name:'MotoristaKey',text:{}},{name:'Cpf',text:{}},{name:'DataTratativa',text:{}},{name:'Gestor',text:{}},{name:'GestorEmail',text:{}},{name:'TipoAcao',text:{}},{name:'Observacao',text:{allowMultipleLines:true}},{name:'Operacao',text:{}},{name:'Placa',text:{}},{name:'Sinais',text:{allowMultipleLines:true}} ] };
+  const r=await gpost('/sites/'+site+'/lists', token, body); SP_LIST_ID=r.id; return r.id;
+}
+async function tratSyncFromSP(){ if(!spSignedIn()) return false; let token; try{ token=await spToken(false); }catch(e){ return false; } if(!token) return false;
+  try{ const site=await spSiteId(token); const listId=await spEnsureTratList(token);
+    let url='/sites/'+site+'/lists/'+listId+'/items?expand=fields&$top=500'; const map={};
+    while(url){ const j=await gget(url.replace('https://graph.microsoft.com/v1.0',''), token); (j.value||[]).forEach(it=>{ const f=it.fields||{}; const key=f.MotoristaKey||('nome:'+norm(f.Title||'')); (map[key]=map[key]||[]).push({ id:it.id, data:f.DataTratativa||'', gestor:f.Gestor||'', tipo:f.TipoAcao||'', obs:f.Observacao||'', op:f.Operacao||'', placa:f.Placa||'', sinais:f.Sinais||'', nome:f.Title||'' }); }); url=j['@odata.nextLink']||''; }
+    TRAT_CACHE=map; return true;
+  }catch(e){ toast('Tratativas (SharePoint): '+e.message); return false; }
+}
+async function tratAdd(nome, t){
+  const local=tratLocalLoad(); const key=tratKey(nome); (local[key]=local[key]||[]).unshift(t); tratLocalSave(local);
+  if(TRAT_CACHE){ (TRAT_CACHE[key]=TRAT_CACHE[key]||[]).unshift(t); }
+  if(spSignedIn()){
+    try{ const token=await spToken(true); const site=await spSiteId(token); const listId=await spEnsureTratList(token);
+      await gpost('/sites/'+site+'/lists/'+listId+'/items', token, { fields:{ Title:nome, MotoristaKey:key, Cpf:t.cpf||'', DataTratativa:t.data, Gestor:t.gestor, GestorEmail:t.gestorEmail||'', TipoAcao:t.tipo, Observacao:t.obs, Operacao:t.op||'', Placa:t.placa||'', Sinais:t.sinais||'' } });
+      return {ok:true, sp:true};
+    }catch(e){ return {ok:true, sp:false, err:e.message}; }
+  }
+  return {ok:true, sp:false};
+}
+// abre o formulário de tratativa p/ o motorista da ficha
+function openTratModal(){ const nome=fichaAtual; if(!nome) return;
+  $('#tratNome').textContent=nome;
+  $('#tratData').value=new Date().toISOString().slice(0,10);
+  let g=''; if(spSignedIn()) g=spGestor().nome; if(!g){ try{ g=localStorage.getItem('integ360_gestor')||''; }catch(e){} }
+  $('#tratGestor').value=g; $('#tratTipo').value='Conversa de orientação'; $('#tratObs').value='';
+  $('#tratModal').style.display='flex'; setTimeout(()=>$('#tratObs').focus(),50);
+}
+async function salvarTratativa(){
+  const nome=fichaAtual; if(!nome) return;
+  const data=$('#tratData').value||new Date().toISOString().slice(0,10);
+  const gestor=$('#tratGestor').value.trim(); const tipo=$('#tratTipo').value; const obs=$('#tratObs').value.trim();
+  if(!gestor){ toast('Informe o gestor responsável'); return; }
+  if(!obs){ toast('Descreva o que foi tratado'); return; }
+  try{ localStorage.setItem('integ360_gestor', gestor); }catch(e){}
+  const M=fichaMetrics(nome);
+  const t={ data, gestor, gestorEmail:(spSignedIn()?spGestor().email:''), tipo, obs, op:M.op||'', placa:M.placas||'', cpf:(typeof NOME2CPF!=='undefined'&&NOME2CPF&&NOME2CPF[norm(nome)])||'', sinais:(M.risco&&M.risco.reasons||[]).join(' · '), ts:Date.now() };
+  $('#tratSave').disabled=true; $('#tratSave').textContent='Salvando…';
+  const r=await tratAdd(nome, t);
+  $('#tratSave').disabled=false; $('#tratSave').textContent='Salvar tratativa';
+  $('#tratModal').style.display='none';
+  toast(r.sp?'Tratativa salva no SharePoint ✓':(spSignedIn()?('Salva local — SharePoint falhou: '+(r.err||'')):'Tratativa salva (local)'));
+  renderFicha();
+}
+
+/* ============================================================
    EVENTOS / INIT
    ============================================================ */
 // tabs
@@ -2899,6 +3019,11 @@ $('#mediaBox').addEventListener('click',e=>{ const tr=e.target.closest('.mediaro
 // capinha do motorista → detalhamento (ficha)
 $('#semanaBox').addEventListener('click',e=>{ const c=e.target.closest('.capinha'); if(!c)return; openFicha(decodeURIComponent(c.dataset.mot)); });
 $('#fichaBack').onclick=voltarResumo;
+// tratativa (modal)
+$('#btnTratativa').onclick=openTratModal;
+$('#tratCancel').onclick=()=>{ $('#tratModal').style.display='none'; };
+$('#tratSave').onclick=salvarTratativa;
+$('#tratModal').addEventListener('click',e=>{ if(e.target.id==='tratModal') $('#tratModal').style.display='none'; });
 // tema
 function applyTheme(t){ document.documentElement.setAttribute('data-theme',t); try{localStorage.setItem(LS.theme,t);}catch(e){} }
 $('#themeBtn').onclick=()=>applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
