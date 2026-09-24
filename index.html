@@ -1177,7 +1177,7 @@ function capinha(m,weeks){
     <div class="cap-metrics">
       <div class="cm"><span>Identif.</span><b class="${m.ident==null?'':(m.ident>=CFG.sem?'ok':'bad')}">${m.ident==null?'—':m.ident+'%'}</b></div>
       <div class="cm"><span>Média</span><b class="${medaOk?'ok':'bad'}">${medaTxt}</b></div>
-      <div class="cm"><span>Jornada</span><b class="${m.aj!=null&&m.aj<90?'bad':'ok'}" title="aderência de jornada — % da condução dentro do ponto${m.ddReal>0?' · '+hDec(m.ddReal)+' fora':''}">${m.aj==null?'—':m.aj+'%'}</b></div>
+      <div class="cm"><span>Fora da jornada</span><b class="${m.ddReal>0?'bad':''}" title="horas de condução fora do horário do ponto${m.aj!=null?' · aderência de jornada '+m.aj+'%':''}">${m.ddReal>0?hDec(m.ddReal):'0h'}</b></div>
       <div class="cm"><span>Alertas</span><b class="${totAl>=5?'bad':''}">${totAl}</b></div>
     </div>
     <div class="cap-foot">
