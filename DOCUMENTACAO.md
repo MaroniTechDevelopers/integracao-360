@@ -231,8 +231,9 @@ descanso = (início da jornada do dia atual) − (fim da jornada do dia anterior
 ```
 - Guardado em `rec.interjornada` (no **dia que começou cedo demais**).
 - Se `descanso < CFG.interjornadaMin` (padrão `660 min = 11h`) → flag `interjornada` (atenção).
-- **Visualização:** faixa **"Descanso"** na linha do tempo (verde ≥11h, barra vermelha hachurada
-  + marcador ▾ no dia violado); KPI "Descanso mín" no card; bloco na ficha e no PDF.
+- **Visualização:** **marcador 🛌 na trilha do Ponto** (estilo dos alertas: ícone + haste vermelha),
+  posicionado no **início do dia** que não cumpriu as 11h; KPI "Descanso mín" no cabeçalho do card;
+  bloco "Descanso entre jornadas" na ficha e no PDF.
 - **Limitação conhecida (v1):** jornadas que cruzam a meia-noite ainda não são tratadas com precisão total.
 
 ### 6.8 Almoço
@@ -331,8 +332,8 @@ Renderizada por `buildWeekCards` (por motorista) e `buildPlacaCards` (por placa)
 em `renderZoom` / `setupZoom`. Cada card guarda seu estado de zoom em `ZTL[id]`.
 
 **Faixas (lanes):**
-- **Ponto** — intervalos trabalhados (batidas).
-- **Descanso** — descanso entre jornadas (verde ≥11h; vermelho hachurado + ▾ quando < 11h). *(só modo motorista)*
+- **Ponto** — intervalos trabalhados (batidas). Traz também o **marcador 🛌 de interjornada**
+  (descanso < 11h) no início do dia que não cumpriu — mesmo estilo dos marcadores de alerta.
 - **Direção** — movimento do veículo (com placa; hachurado quando sem identificação; contorno quando fora da jornada).
 - **Alertas** — marcadores por tipo/severidade no horário exato.
 - **Identificação** — verde (identificado) / vermelho (sem ID) / destacado (condutor divergente).
