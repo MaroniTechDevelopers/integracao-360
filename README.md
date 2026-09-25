@@ -10,7 +10,7 @@ descanso entre jornadas abaixo da CLT), medir **aderência de jornada** e gerar 
 ## Como funciona
 
 - **Página única** (`index.html`) — HTML + CSS + JavaScript, **sem backend**. Abre no navegador.
-- Publicada via **GitHub Pages**: https://maronitechdevelopers.github.io/integracao-360/
+- Publicada via **GitHub Pages**: https://maronitechdevelopers.github.io/pulso-360/
 - Não há versão em Python — toda a lógica roda no navegador, em JS.
 
 ## Publicar
