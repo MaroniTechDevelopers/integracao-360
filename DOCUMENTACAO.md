@@ -1,4 +1,4 @@
-# Painel Integração 360 — Documentação Técnica
+# Painel Pulso 360 — Documentação Técnica
 
 > **Grupo Maroni / Transmaroni** — Integração de Condutor & Jornada (Trimble × Ponto × Identificação)
 > Documento de referência da base de código. Última revisão: **2026-09-25**.
@@ -33,7 +33,7 @@ consiga manter, auditar ou reimplementar a solução sem precisar decifrar o có
 
 ## 1. Visão geral
 
-O **Painel Integração 360** cruza, por **motorista + dia**, quatro dimensões da operação:
+O **Painel Pulso 360** cruza, por **motorista + dia**, quatro dimensões da operação:
 
 - **Folha de ponto** (jornada batida pelo colaborador);
 - **Movimentação do veículo** (Trimble — quando e onde o veículo rodou, km, litros);
@@ -58,7 +58,7 @@ horário do ponto (linguagem positiva; substituiu o antigo termo interno "dedo d
   só arquivo. **Não há backend, banco de dados nem build.** Abre direto no navegador.
 - **Fonte de trabalho:** `../PROJETOS/Dedo Duro/Painel-Ponto-x-Movimentacao-x-Trimble.html`
   (o `publicar.bat` copia esse arquivo para `index.html` antes de publicar).
-- **Título da aba:** `Conferência Ponto × Movimentação × Trimble — Integração 360`.
+- **Título da aba:** `Conferência Ponto × Movimentação × Trimble — Pulso 360`.
 - **Linguagem:** JavaScript puro (sem framework). Manipulação direta do DOM.
 - **Não existe versão em Python.** Toda a lógica descrita neste documento roda no navegador,
   em JS. Uma eventual reimplementação em Python (pandas/Streamlit) usaria estas mesmas regras.
@@ -102,14 +102,14 @@ Basta abrir `index.html` (ou a versão de trabalho) no navegador. Nenhuma instal
    - copia a versão de trabalho para `index.html`;
    - `git add index.html` (+ `dados.enc` se existir);
    - `git commit` e `git push origin main`.
-3. Em ~1 minuto sai no ar em: **https://maronitechdevelopers.github.io/integracao-360/**
+3. Em ~1 minuto sai no ar em: **https://maronitechdevelopers.github.io/pulso-360/**
 
 ```
 publicar.bat            # publica o painel
 git push origin main    # equivalente manual do passo de push
 ```
 
-> **Backup / versionamento:** o histórico vive no Git (repositório `integracao-360`). Cada
+> **Backup / versionamento:** o histórico vive no Git (repositório `pulso-360`). Cada
 > publicação é um commit. Para restaurar uma versão antiga: `git log` → `git checkout <hash> -- index.html`.
 
 ---
@@ -362,7 +362,7 @@ qual ação tomada, observação, data, gestor). Objetivo: o painel funcionar "c
 com base de dados fixa, independente de atualização".
 
 - **Persistência dupla:**
-  - **SharePoint List** `Tratativas Integração 360` (compartilhada) — criada automaticamente por
+  - **SharePoint List** `Tratativas Pulso 360` (compartilhada) — criada automaticamente por
     `spEnsureTratList` com as colunas: `MotoristaKey, Cpf, DataTratativa, Gestor, GestorEmail,
     TipoAcao, Observacao, Operacao, Placa, Sinais`.
   - **localStorage** (`integ360_tratativas`) — cache/local por navegador.
@@ -382,7 +382,7 @@ Três camadas, com papéis diferentes:
 | Camada | Chave/Local | Escopo | Papel |
 |---|---|---|---|
 | **localStorage** | `ddPMT_data` (dados), `ddPMT_cfg`, `ddPMT_theme`, `integ360_*` | por navegador | Guardar o último import, configs, tema, tratativas locais |
-| **SharePoint** | site `gestao.desenvolvimento` / pasta `Relatório Integração 360` + Lista de tratativas | compartilhado (M365) | Fonte oficial e compartilhada (quando o TI liberar) |
+| **SharePoint** | site `gestao.desenvolvimento` / pasta `Relatório Pulso 360` + Lista de tratativas | compartilhado (M365) | Fonte oficial e compartilhada (quando o TI liberar) |
 | **Snapshot criptografado** | arquivo `dados.enc` + chave no link (`#k=...`) | compartilhável | Distribuir os dados pelo link **sem** depender do SharePoint |
 
 ### Snapshot criptografado (interino, sem SharePoint)
@@ -404,11 +404,11 @@ Configuração em `SP_CFG`:
 |---|---|
 | `clientId` | `42461f0c-08c1-48dd-a12b-b891c8747427` |
 | `tenantId` | `8babaf2b-248f-4651-98d6-1e5312fbe00a` |
-| `redirectUri` | `https://maronitechdevelopers.github.io/integracao-360/` |
+| `redirectUri` | `https://maronitechdevelopers.github.io/pulso-360/` |
 | `siteHost` | `grupotransmaroni.sharepoint.com` |
 | `sitePath` | `/sites/gestao.desenvolvimento` |
-| `folder` | `Relatório Integração 360` |
-| `tratList` | `Tratativas Integração 360` |
+| `folder` | `Relatório Pulso 360` |
+| `tratList` | `Tratativas Pulso 360` |
 | `scopes` | `Sites.ReadWrite.All`, `User.Read` |
 | `adminEmails` | `maroni.tech@transmaroni.com.br` |
 
@@ -529,5 +529,5 @@ Configuração em `SP_CFG`:
 
 ---
 
-*Documento mantido junto ao código em `integracao-360/DOCUMENTACAO.md`. Ao alterar regras ou
+*Documento mantido junto ao código em `pulso-360/DOCUMENTACAO.md`. Ao alterar regras ou
 adicionar telas, atualize as seções 6, 7 e 8.*

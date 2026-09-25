@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conferência Ponto × Movimentação × Trimble — Integração 360</title>
+<title>Conferência Ponto × Movimentação × Trimble — Pulso 360</title>
 <link rel="icon" id="favicon" type="image/png" href="">
 <style>
   /* ============ TEMA (identidade Grupo Maroni — claro padrão, toggle p/ escuro) ============ */
@@ -378,7 +378,7 @@
       <img class="brand-logo" id="brandLogo" alt="Grupo Maroni" src="">
       <div>
         <h1>Conferência de Jornada — Ponto × Movimentação × Trimble</h1>
-        <div class="sub">Projeto <b>Integração 360</b> · cruzamento folha de ponto × movimentação do veículo × identificação facial</div>
+        <div class="sub">Projeto <b>Pulso 360</b> · cruzamento folha de ponto × movimentação do veículo × identificação facial</div>
       </div>
     </div>
     <div class="head-tools">
@@ -659,7 +659,7 @@
     <div class="sec-title"><h2>Como funciona</h2></div>
     <div class="card docs">
       <p>O painel cruza <b>três fontes independentes</b> por <b>motorista + dia</b> e aponta onde elas não batem —
-         a base da <b>Integração 360</b>: garantir que quem bateu ponto é quem realmente dirigiu o veículo, nos horários certos.</p>
+         a base do <b>Pulso 360</b>: garantir que quem bateu ponto é quem realmente dirigiu o veículo, nos horários certos.</p>
       <h4>O que cada situação significa</h4>
       <ul>
         <li><b style="color:var(--crit-ink)">Identificação divergente</b> — a câmera Trimble reconheceu um motorista <b>diferente</b> do escalado na folha. É o achado central.</li>
@@ -684,7 +684,7 @@
 
   <div class="footer">
     <img id="footLogo" alt="" src="">
-    <span>Grupo Maroni · Integração 360 — Identificação de Condutor &amp; Média (Trimble)</span>
+    <span>Grupo Maroni · Pulso 360 — Identificação de Condutor &amp; Média (Trimble)</span>
   </div>
 </main>
 
@@ -1814,7 +1814,7 @@ function pdfShell(titulo, sub, badge, corpo){
   </div>
   <div class="strip"></div>
   ${corpo}
-  <div class="ft"><span>Integração 360 · Grupo Maroni · Ponto × Movimentação × Trimble</span><span>Gerado em ${now}</span></div>
+  <div class="ft"><span>Pulso 360 · Grupo Maroni · Ponto × Movimentação × Trimble</span><span>Gerado em ${now}</span></div>
 </div>
 <script>window.onload=function(){setTimeout(function(){try{window.focus();window.print();}catch(e){}},400);};<\/script>
 </body></html>`;
@@ -1859,7 +1859,7 @@ function exportFichaPDF(){
     : '<h2 class="sec">Tratativas com o motorista</h2><div style="font-size:12px;color:#64748b">Nenhuma tratativa registrada ainda.</div>';
   const sub=`${M.op||'—'}${M.placas?' · '+M.placas:''} · ${M.tempo} de casa · ${periodoLabel()}`;
   const corpo=kpis+'<h2 class="sec">Pontos de atenção × pontos fortes</h2>'+pontos+alertasBloco+'<h2 class="sec">Plano de ação — o que fazer</h2>'+plano+reco+tratBloco;
-  pdfOpen(pdfShell('Integração 360 — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
+  pdfOpen(pdfShell('Pulso 360 — '+nome, sub, {txt:PDF_LAB[M.risco.cls], cor:PDF_COR[M.risco.cls], extra:(M.risco.reasons.length?M.risco.reasons.length+' sinal(is)':'sem sinais')}, corpo));
 }
 function exportPainelPDF(){
   const rows=filtered();
@@ -1924,7 +1924,7 @@ function exportPainelPDF(){
   const sub=`${periodoLabel()}${opSel?' · Operação: '+opSel:''} · ${motSet.length} motorista(s) · ${rows.length} registro(s)`;
   const corpo=kg+farol+critTab+opTab;
   const critCls = cnt.vermelho>0?'vermelho':(cnt.amarelo>0?'amarelo':'verde');
-  pdfOpen(pdfShell('Integração 360 — Painel Executivo', sub, {txt:PDF_LAB[critCls], cor:PDF_COR[critCls], extra:cnt.vermelho+' prioridade(s)'}, corpo));
+  pdfOpen(pdfShell('Pulso 360 — Painel Executivo', sub, {txt:PDF_LAB[critCls], cor:PDF_COR[critCls], extra:cnt.vermelho+' prioridade(s)'}, corpo));
 }
 
 /* ============================================================
@@ -2892,11 +2892,11 @@ function baixarCsv(lines,nome){
 const SP_CFG = {
   clientId:'42461f0c-08c1-48dd-a12b-b891c8747427',
   tenantId:'8babaf2b-248f-4651-98d6-1e5312fbe00a',
-  redirectUri:'https://maronitechdevelopers.github.io/integracao-360/',
+  redirectUri:'https://maronitechdevelopers.github.io/pulso-360/',
   siteHost:'grupotransmaroni.sharepoint.com',
   sitePath:'/sites/gestao.desenvolvimento',
-  folder:'Relatório Integração 360',
-  tratList:'Tratativas Integração 360',
+  folder:'Relatório Pulso 360',
+  tratList:'Tratativas Pulso 360',
   scopes:['Sites.ReadWrite.All','User.Read'],   // ReadWrite: ler relatórios + gravar tratativas na Lista
   adminEmails:['maroni.tech@transmaroni.com.br']   // quem enxerga a aba Dados (guarda-corpo de UX; segurança real = SharePoint)
 };
@@ -3103,7 +3103,7 @@ function mostrarLinkSnapshot(link, mb){
   let bg=document.getElementById('snapModal'); if(bg) bg.remove();
   bg=document.createElement('div'); bg.id='snapModal'; bg.className='modal-bg'; bg.style.display='flex';
   bg.innerHTML='<div class="modal" style="max-width:620px"><h3>🔗 Link compartilhável gerado</h3>'+
-    '<p class="modal-sub"><b>1)</b> O arquivo <b>dados.enc</b> ('+mb+' MB) foi baixado — coloque-o na pasta <b>integracao-360</b> e rode o <b>publicar.bat</b>.<br><b>2)</b> Compartilhe este link (ele contém a chave; só quem tiver o link vê os dados):</p>'+
+    '<p class="modal-sub"><b>1)</b> O arquivo <b>dados.enc</b> ('+mb+' MB) foi baixado — coloque-o na pasta <b>pulso-360</b> e rode o <b>publicar.bat</b>.<br><b>2)</b> Compartilhe este link (ele contém a chave; só quem tiver o link vê os dados):</p>'+
     '<input type="text" id="snapLink" readonly value="'+link+'">'+
     '<div class="modal-actions"><button class="btn" id="snapClose" style="color:var(--ink);background:var(--surface);border-color:var(--border)">Fechar</button><button class="btn solid" id="snapCopy">Copiar link</button></div></div>';
   document.body.appendChild(bg);
