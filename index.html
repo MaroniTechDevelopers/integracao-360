@@ -549,7 +549,8 @@
     <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px">
       <b>Integração SharePoint</b>
       <button class="btn solid" id="spBtn" title="Entrar e atualizar os dados a partir da pasta do SharePoint">☁️ Atualizar do SharePoint</button>
-      <button class="btn" id="btnSnapshot" title="Gerar um link compartilhável com os dados atuais (criptografado) — enquanto o SharePoint não está liberado" style="color:var(--ink);background:var(--surface);border-color:var(--border)">🔗 Gerar link compartilhável</button>
+      <button class="btn" id="btnEstrutura" title="Criar no SharePoint a estrutura de pastas por tipo → ano → mês" style="color:var(--ink);background:var(--surface);border-color:var(--border)">📁 Organizar pastas</button>
+      <button class="btn" id="btnSnapshot" title="Gerar um link compartilhável com os dados atuais (criptografado)" style="color:var(--ink);background:var(--surface);border-color:var(--border)">🔗 Gerar link compartilhável</button>
       <span id="dadosWho" style="font-size:12px;color:var(--muted)"></span>
       <button class="btn" id="dadosLogout" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">Sair</button>
     </div>
@@ -982,7 +983,7 @@ function opDaViagem(placas, data){ if(typeof PED_OP==='undefined'||!PED_OP) retu
 function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00,jornadaMin:440,interjornadaMin:660}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
 function saveCfg(){ try{ localStorage.setItem(LS.cfg, JSON.stringify(CFG)); }catch(e){} }
 function loadData(){ try{ const d=JSON.parse(localStorage.getItem(LS.data)||'null'); return (d&&d.records)?d:null; }catch(e){ return null; } }
-function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }catch(e){} }
+function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }catch(e){} if(typeof agendarCache==='function') agendarCache(); }
 
 /* ============================================================
    MOTOR DE CONFERÊNCIA
@@ -2936,19 +2937,55 @@ function detectTipo(name, header, ext){
 }
 function spGrab(f){ return fetch(f['@microsoft.graph.downloadUrl']).then(r=>r.arrayBuffer()).then(ab=>new File([ab], f.name)); }
 function readFileP(file){ return new Promise(res=>readFile(file,res)); }
+// varre uma pasta e TODAS as subpastas (tipo→ano→mês→dia), juntando os arquivos
+async function spWalk(siteId, folderId, token, acc, depth){
+  acc=acc||[]; if(depth>7) return acc;
+  let url='/sites/'+siteId+'/drive/items/'+folderId+'/children?$top=200';
+  while(url){
+    const j=await gget(url.replace('https://graph.microsoft.com/v1.0',''), token);
+    for(const it of (j.value||[])){
+      if(it.folder) await spWalk(siteId, it.id, token, acc, depth+1);
+      else if(it.file && it['@microsoft.graph.downloadUrl']) acc.push(it);
+    }
+    url=j['@odata.nextLink']||'';
+  }
+  return acc;
+}
+// cria uma subpasta (idempotente: devolve a existente se já houver)
+async function spEnsureFolder(siteId, parentId, name, token){
+  const kids=await gget('/sites/'+siteId+'/drive/items/'+parentId+'/children?$select=id,name,folder&$top=200', token);
+  const f=(kids.value||[]).find(k=>k.folder && k.name===name);
+  if(f) return f.id;
+  const r=await gpost('/sites/'+siteId+'/drive/items/'+parentId+'/children', token, { name:name, folder:{}, '@microsoft.graph.conflictBehavior':'fail' });
+  return r.id;
+}
+const SP_ESTRUTURA=['01 - Jornada (Ponto)','02 - Movimentacao (Trimble)','03 - Alertas','04 - Boletim do Motorista','05 - Boletim do Veiculo','06 - Saude das Cameras','07 - Motoristas','08 - Veiculos (TMS)','09 - Pedidos','10 - Abastecimento','11 - Metas'];
+async function spCriarEstrutura(){
+  if(!spSignedIn()){ toast('Entre com a Microsoft primeiro'); return; }
+  let token; try{ token=await spToken(true); }catch(e){ toast('Login: '+(e.message||'')); return; }
+  const btn=$('#btnEstrutura'); if(btn){ btn.disabled=true; btn.textContent='Criando pastas…'; }
+  try{
+    const site=await spSiteId(token);
+    const root=await gget('/sites/'+site+'/drive/root:/'+encodeURIComponent(SP_CFG.folder), token);
+    const now=new Date(); const ano=String(now.getFullYear()); const mes=String(now.getMonth()+1).padStart(2,'0');
+    let n=0;
+    for(const t of SP_ESTRUTURA){ const tf=await spEnsureFolder(site, root.id, t, token); const af=await spEnsureFolder(site, tf, ano, token); await spEnsureFolder(site, af, mes, token); n++; }
+    toast('Estrutura criada ✓ '+n+' tipos · '+ano+'/'+mes);
+  }catch(e){ toast('Erro ao criar estrutura: '+(e.message||e)); }
+  if(btn){ btn.disabled=false; btn.textContent='📁 Organizar pastas'; }
+}
 async function spLoadAll(interactive){
   const setPill=t=>{ const p=$('#dataModeTxt'); if(p)p.textContent=t; };
   let token; try{ token=await spToken(interactive); }catch(e){ toast('Login: '+(e.message||'cancelado')); return false; }
   if(!token) return false;   // silencioso sem sessão → não faz nada
   toast('Lendo a pasta do SharePoint…'); setPill('conectando ao SharePoint…');
-  let site, items;
+  let site, files;
   try{
     site=await gget('/sites/'+SP_CFG.siteHost+':'+SP_CFG.sitePath, token);
-    items=await gget('/sites/'+site.id+'/drive/root:/'+encodeURIComponent(SP_CFG.folder)+':/children?$top=200', token);
+    const rootItem=await gget('/sites/'+site.id+'/drive/root:/'+encodeURIComponent(SP_CFG.folder), token);
+    files=await spWalk(site.id, rootItem.id, token, [], 0);   // varre a pasta + subpastas (tipo/ano/mês/dia)
   }catch(e){ toast('Erro no SharePoint — '+e.message); setPill('erro no SharePoint'); return false; }
-  const brutos=(items.value||[]);
-  const files=brutos.filter(f=>f.file&&f['@microsoft.graph.downloadUrl']);
-  if(!files.length){ toast('Pasta sem arquivos utilizáveis — '+brutos.length+' item(ns) na pasta'); return false; }
+  if(!files.length){ toast('Nenhum arquivo encontrado na pasta/subpastas'); return false; }
   const byType={};
   for(const f of files){ const ext=(f.name.split('.').pop()||'').toLowerCase(); let header=''; if(ext==='csv'||ext==='txt') header=await spHead(f['@microsoft.graph.downloadUrl']);
     const t=detectTipo(f.name, header, ext); if(!t) continue; if(!byType[t] || f.lastModifiedDateTime>byType[t].lastModifiedDateTime) byType[t]=f; }
@@ -3069,6 +3106,14 @@ function restoreState(S){ if(!S) return;
   TMS=S.TMS||null; TMS_N=S.TMS_N||0; ABAST=S.ABAST||null; ABAST_N=S.ABAST_N||0; META_FAM=S.META_FAM||null; META_PLACA=S.META_PLACA||null; META_N=S.META_N||0;
   PED_OP=S.PED_OP||null; PED_DRV=S.PED_DRV||null; PED_N=S.PED_N||0;
   build(); fillFilters(); renderAll(); updateDropStatus(); }
+// ===== CACHE LOCAL do estado completo (IndexedDB) — abre instantâneo e atualiza em 2º plano =====
+function idbOpen(){ return new Promise((res,rej)=>{ let r; try{ r=indexedDB.open('integ360db',1); }catch(e){ return rej(e); } r.onupgradeneeded=()=>{ try{ r.result.createObjectStore('kv'); }catch(e){} }; r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbSet(k,v){ try{ const db=await idbOpen(); await new Promise((res,rej)=>{ const tx=db.transaction('kv','readwrite'); tx.objectStore('kv').put(v,k); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); db.close(); }catch(e){} }
+async function idbGet(k){ try{ const db=await idbOpen(); const v=await new Promise((res,rej)=>{ const tx=db.transaction('kv','readonly'); const rq=tx.objectStore('kv').get(k); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); db.close(); return v; }catch(e){ return null; } }
+let _cacheTimer=null;
+function agendarCache(){ clearTimeout(_cacheTimer); _cacheTimer=setTimeout(cacheSalvar, 2500); }
+async function cacheSalvar(){ try{ if(!REAL||!RAW) return; const raw=new TextEncoder().encode(JSON.stringify(snapshotState())); const g=await _gz(raw); await idbSet('estado',{gz:g.gz,b:g.b,ts:Date.now()}); }catch(e){} }
+async function cacheRestaurar(){ try{ const c=await idbGet('estado'); if(!c||!c.b) return 0; let bytes=c.b; if(c.gz) bytes=await _gunz(c.b); restoreState(JSON.parse(new TextDecoder().decode(bytes))); return c.ts||1; }catch(e){ return 0; } }
 async function gerarSnapshot(){
   if(!REAL||!RAW){ toast('Importe os relatórios antes de gerar o link'); return; }
   toast('Gerando snapshot criptografado…');
@@ -3160,10 +3205,20 @@ $('#fichaPdf').onclick=exportFichaPDF;
 $('#spBtn').onclick=()=>spLoadAll(true).then(()=>applyDadosGate());
 $('#dadosLogin').onclick=()=>spLoginId().then(()=>applyDadosGate());
 $('#btnSnapshot').onclick=gerarSnapshot;
+$('#btnEstrutura').onclick=spCriarEstrutura;
 $('#dadosLogout').onclick=async()=>{ try{ if(_msal) await _msal.logoutPopup({}); }catch(e){} try{localStorage.removeItem('sp_auto');}catch(e){} TRAT_CACHE=null; _tratSyncTried=false; applyDadosGate(); goTab('semana'); };
 applyDadosGate();
 // auto: se já autenticou antes nesta máquina, tenta atualizar silenciosamente ao abrir
-(function(){ try{ if(localStorage.getItem('sp_auto')==='1'){ setTimeout(()=>{ if(typeof msal!=='undefined') spLoadAll(false); }, 500); } }catch(e){} })();
+(async function(){
+  if((location.hash||'').match(/[#&]k=/)) return;   // link compartilhado: o snapshot cuida do carregamento
+  const setPill=t=>{ const p=$('#dataModeTxt'); if(p)p.textContent=t; };
+  let temCache=0; try{ temCache=await cacheRestaurar(); }catch(e){}
+  if(temCache){ setPill('dados locais · '+new Date(temCache).toLocaleString('pt-BR')); }
+  try{ if(localStorage.getItem('sp_auto')==='1' && typeof msal!=='undefined' && spSignedIn()){
+      if(temCache) setPill('dados locais · atualizando do SharePoint…');
+      spLoadAll(false).then(ok=>{ if(ok) agendarCache(); });
+  } }catch(e){}
+})();
 // filtros
 ['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus'].forEach(s=>$(s).addEventListener('change',renderAll));
 $('#fBusca').addEventListener('input',renderAll);
