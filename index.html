@@ -544,6 +544,7 @@
     <div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px">
       <b>Integração SharePoint</b>
       <button class="btn solid" id="spBtn" title="Entrar e atualizar os dados a partir da pasta do SharePoint">☁️ Atualizar do SharePoint</button>
+      <button class="btn" id="btnSnapshot" title="Gerar um link compartilhável com os dados atuais (criptografado) — enquanto o SharePoint não está liberado" style="color:var(--ink);background:var(--surface);border-color:var(--border)">🔗 Gerar link compartilhável</button>
       <span id="dadosWho" style="font-size:12px;color:var(--muted)"></span>
       <button class="btn" id="dadosLogout" style="margin-left:auto;color:var(--ink);background:var(--surface);border-color:var(--border)">Sair</button>
     </div>
@@ -3016,6 +3017,71 @@ async function salvarTratativa(){
 }
 
 /* ============================================================
+   SNAPSHOT CRIPTOGRAFADO — compartilhar dados pelo link (interino, sem SharePoint)
+   os dados vão CIFRADOS no site (dados.enc); a CHAVE vai só no link (#k=...)
+   ============================================================ */
+function _b64(bytes){ let s='',a=new Uint8Array(bytes); const CH=0x8000; for(let i=0;i<a.length;i+=CH) s+=String.fromCharCode.apply(null,a.subarray(i,i+CH)); return btoa(s); }
+function _unb64(str){ const s=atob(str),a=new Uint8Array(s.length); for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i); return a; }
+function _b64url(b){ return _b64(b).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function _unb64url(s){ s=String(s).replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4)s+='='; return _unb64(s); }
+async function _gz(bytes){ if(typeof CompressionStream==='undefined') return {gz:false,b:bytes}; const cs=new CompressionStream('gzip'); const w=cs.writable.getWriter(); w.write(bytes); w.close(); return {gz:true,b:new Uint8Array(await new Response(cs.readable).arrayBuffer())}; }
+async function _gunz(bytes){ const ds=new DecompressionStream('gzip'); const w=ds.writable.getWriter(); w.write(bytes); w.close(); return new Uint8Array(await new Response(ds.readable).arrayBuffer()); }
+function snapshotState(){
+  return { v:1, ts:Date.now(), REAL:!!REAL, RAW, MOV_TOT, MOV_IDN, MOV_UNSEG_STORE, PLACA_UO, PLACA_MOV,
+    ALERTS, ALERTS_N, AL_TL, BOL, BOL_N, BOL_DAY, BDV, BDV_N, ADMISSAO, ADMISSAO_CPF, ADMISSAO_N,
+    TMS, TMS_N, ABAST, ABAST_N, META_FAM, META_PLACA, META_N,
+    PED_OP, PED_DRV, PED_N, CPF2NOME, NOME2CPF, SAUDE, SAUDE_N }; }
+function restoreState(S){ if(!S) return;
+  REAL=!!S.REAL; RAW=S.RAW||null; MOV_TOT=S.MOV_TOT||{}; MOV_IDN=S.MOV_IDN||{}; MOV_UNSEG_STORE=S.MOV_UNSEG_STORE||null; PLACA_UO=S.PLACA_UO||null; PLACA_MOV=S.PLACA_MOV||null;
+  ALERTS=S.ALERTS||null; ALERTS_N=S.ALERTS_N||0; AL_TL=S.AL_TL||null; BOL=S.BOL||null; BOL_N=S.BOL_N||0; BOL_DAY=S.BOL_DAY||null; BDV=S.BDV||null; BDV_N=S.BDV_N||0;
+  ADMISSAO=S.ADMISSAO||null; ADMISSAO_CPF=S.ADMISSAO_CPF||null; ADMISSAO_N=S.ADMISSAO_N||0; CPF2NOME=S.CPF2NOME||null; NOME2CPF=S.NOME2CPF||null; SAUDE=S.SAUDE||null; SAUDE_N=S.SAUDE_N||0;
+  TMS=S.TMS||null; TMS_N=S.TMS_N||0; ABAST=S.ABAST||null; ABAST_N=S.ABAST_N||0; META_FAM=S.META_FAM||null; META_PLACA=S.META_PLACA||null; META_N=S.META_N||0;
+  PED_OP=S.PED_OP||null; PED_DRV=S.PED_DRV||null; PED_N=S.PED_N||0;
+  build(); fillFilters(); renderAll(); updateDropStatus(); }
+async function gerarSnapshot(){
+  if(!REAL||!RAW){ toast('Importe os relatórios antes de gerar o link'); return; }
+  toast('Gerando snapshot criptografado…');
+  try{
+    const json=JSON.stringify(snapshotState()); const raw=new TextEncoder().encode(json);
+    const g=await _gz(raw);
+    // chave FIXA por navegador (link estável entre atualizações); some no localStorage do admin
+    let kb64; try{ kb64=localStorage.getItem('integ360_snapkey'); }catch(e){}
+    let keyRaw; if(kb64){ keyRaw=_unb64url(kb64); } else { keyRaw=crypto.getRandomValues(new Uint8Array(32)); try{ localStorage.setItem('integ360_snapkey',_b64url(keyRaw)); }catch(e){} }
+    const key=await crypto.subtle.importKey('raw',keyRaw,{name:'AES-GCM'},false,['encrypt']); const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,g.b));
+    const file=JSON.stringify({v:1, gz:g.gz, iv:_b64(iv), data:_b64(ct)});
+    const blob=new Blob([file],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='dados.enc'; a.click();
+    const link=SP_CFG.redirectUri+'#k='+_b64url(keyRaw);
+    mostrarLinkSnapshot(link, (file.length/1048576).toFixed(1));
+  }catch(e){ toast('Erro ao gerar snapshot: '+(e.message||e)); }
+}
+async function carregarSnapshotDoLink(kb64){
+  try{ toast('Abrindo dados compartilhados…');
+    const keyRaw=_unb64url(kb64);
+    const f=await fetch('dados.enc',{cache:'no-store'}).then(r=>{ if(!r.ok) throw new Error('dados.enc não encontrado'); return r.json(); });
+    const iv=_unb64(f.iv), ct=_unb64(f.data);
+    const key=await crypto.subtle.importKey('raw',keyRaw,{name:'AES-GCM'},false,['decrypt']);
+    let pt=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct));
+    if(f.gz) pt=await _gunz(pt);
+    restoreState(JSON.parse(new TextDecoder().decode(pt)));
+    const pill=$('#dataModeTxt'); if(pill) pill.textContent='dados compartilhados (snapshot)';
+    toast('Dados compartilhados carregados ✓');
+  }catch(e){ toast('Não consegui abrir o snapshot: '+(e.message||e)); }
+}
+function mostrarLinkSnapshot(link, mb){
+  let bg=document.getElementById('snapModal'); if(bg) bg.remove();
+  bg=document.createElement('div'); bg.id='snapModal'; bg.className='modal-bg'; bg.style.display='flex';
+  bg.innerHTML='<div class="modal" style="max-width:620px"><h3>🔗 Link compartilhável gerado</h3>'+
+    '<p class="modal-sub"><b>1)</b> O arquivo <b>dados.enc</b> ('+mb+' MB) foi baixado — coloque-o na pasta <b>integracao-360</b> e rode o <b>publicar.bat</b>.<br><b>2)</b> Compartilhe este link (ele contém a chave; só quem tiver o link vê os dados):</p>'+
+    '<input type="text" id="snapLink" readonly value="'+link+'">'+
+    '<div class="modal-actions"><button class="btn" id="snapClose" style="color:var(--ink);background:var(--surface);border-color:var(--border)">Fechar</button><button class="btn solid" id="snapCopy">Copiar link</button></div></div>';
+  document.body.appendChild(bg);
+  bg.addEventListener('click',e=>{ if(e.target===bg) bg.remove(); });
+  document.getElementById('snapClose').onclick=()=>bg.remove();
+  document.getElementById('snapCopy').onclick=()=>{ const i=document.getElementById('snapLink'); i.select(); try{ navigator.clipboard.writeText(i.value); }catch(e){ document.execCommand('copy'); } toast('Link copiado ✓'); };
+}
+
+/* ============================================================
    EVENTOS / INIT
    ============================================================ */
 // tabs
@@ -3062,6 +3128,7 @@ $('#printBtn').onclick=exportPainelPDF;
 $('#fichaPdf').onclick=exportFichaPDF;
 $('#spBtn').onclick=()=>spLoadAll(true).then(()=>applyDadosGate());
 $('#dadosLogin').onclick=()=>spLoginId().then(()=>applyDadosGate());
+$('#btnSnapshot').onclick=gerarSnapshot;
 $('#dadosLogout').onclick=async()=>{ try{ if(_msal) await _msal.logoutPopup({}); }catch(e){} try{localStorage.removeItem('sp_auto');}catch(e){} TRAT_CACHE=null; _tratSyncTried=false; applyDadosGate(); goTab('semana'); };
 applyDadosGate();
 // auto: se já autenticou antes nesta máquina, tenta atualizar silenciosamente ao abrir
@@ -3109,6 +3176,8 @@ if(RAW&&RAW.movUnseg) MOV_UNSEG_STORE=RAW.movUnseg;
 if(RAW&&RAW.bdv){ BDV=RAW.bdv; BDV_N=Object.keys(BDV).length; }
 if(RAW&&RAW.admissao){ ADMISSAO=RAW.admissao.n||null; ADMISSAO_CPF=RAW.admissao.c||null; ADMISSAO_N=ADMISSAO?Object.keys(ADMISSAO).length:0; }
 build(); fillFilters(); renderAll(); updateDropStatus();
+// se o link traz um snapshot compartilhado (#k=...), carrega os dados cifrados por cima
+(function(){ const m=(location.hash||'').match(/[#&]k=([A-Za-z0-9\-_]+)/); if(m) setTimeout(()=>carregarSnapshotDoLink(m[1]),50); })();
 </script>
 </body>
 </html>
