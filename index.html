@@ -179,6 +179,10 @@
   .seg.iddiv{background:var(--serious);outline:2px solid var(--crit-ink);outline-offset:-2px;font-weight:700}
   .seg.fora{outline:2px dashed var(--serious);outline-offset:-2px}
   .seg.almoco{background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 4px,color-mix(in srgb,var(--critical) 60%,#000) 4px,color-mix(in srgb,var(--critical) 60%,#000) 8px);color:#fff}
+  .seg.rest{background:color-mix(in srgb,var(--good) 22%,var(--surface-2));color:var(--good-ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--good) 45%,var(--border))}
+  .seg.rest.viol{background:repeating-linear-gradient(45deg,var(--critical),var(--critical) 5px,color-mix(in srgb,var(--critical) 60%,#000) 5px,color-mix(in srgb,var(--critical) 60%,#000) 10px);color:#fff;box-shadow:none;font-weight:700}
+  .lane.lane-rest{overflow:visible}
+  .lane .rmark{position:absolute;top:-6px;font-size:12px;line-height:1;color:var(--critical);transform:translateX(-50%);pointer-events:none;filter:drop-shadow(0 0 2px var(--critical));z-index:3}
   .lane-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--muted);font-style:italic;letter-spacing:.02em}
   /* ===== linha do tempo SEMANAL com zoom ===== */
   .wtl-card{padding:14px 16px 10px}
@@ -1325,7 +1329,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
   const groups=Object.values(grp).sort((a,b)=> a.gkey<b.gkey?1:a.gkey>b.gkey?-1:a.nome.localeCompare(b.nome));
   const shown=groups.slice(0,cap); const ids=[]; const noun=mode==='fecha'?'períodos':(mode==='dia'?'dias':'semanas'); const zoomTxt=mode==='dia'?'dia → horas':(mode==='fecha'?'período → dia → horas':'semana → dia → horas');
   const html=shown.map((g,i)=>{
-    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,restMin=null,restViol=0; const placas=new Set(), dias=new Set(), ops=new Set();
+    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[],interj=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,restMin=null,restViol=0; const placas=new Set(), dias=new Set(), ops=new Set();
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data); if(r.operacao&&r.operacao!=='—')ops.add(r.operacao);
       for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
@@ -1335,10 +1339,11 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       (r.almocoDrivenSegs||[]).forEach(s=>almoco.push({a:off+s.ini,b:off+s.fim}));
       alertsForRec(r).forEach(al=>{ alertas.push({t:off+al.t,niv:al.niv,tipo:al.tipo}); if(al.niv==='A')nAlto++; });
       dd+=r.horasDedoDuro||0; hpon+=r.horasPonto||0; hcond+=r.horasMov||0; hex+=r.horaExtra||0;
-      if(r.interjornada!=null){ restMin=(restMin==null)?r.interjornada:Math.min(restMin,r.interjornada); if(r.interjornada<CFG.interjornadaMin) restViol++; }
+      if(r.interjornada!=null){ restMin=(restMin==null)?r.interjornada:Math.min(restMin,r.interjornada); if(r.interjornada<CFG.interjornadaMin) restViol++;
+        if(r.punches&&r.punches.length){ const cs=off+r.punches[0]; interj.push({a:cs-r.interjornada,b:cs,min:r.interjornada,viol:r.interjornada<CFG.interjornadaMin,day:r.data}); } }
     });
     const identPct = aderRecs(g.recs);   // ponderado pelo tempo (reflete o vermelho da trilha)
-    ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, ident, t0:0, t1:g.total, total:g.total};
+    ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, ident, interj, t0:0, t1:g.total, total:g.total};
     const opsArr=[...ops]; const opTxt=opsArr.join(', ')||'—';
     const meta=`<div class="meta">
       <div class="m"><span>${mode==='fecha'?'Fechamento':(mode==='dia'?'Dia':'Semana')}</span><b>${g.label}</b></div>
@@ -1359,6 +1364,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       <div class="wtl" id="${id}">
         <div class="wtl-ruler"></div>
         <div class="track"><span class="tlab">Ponto</span><div class="lane" data-k="ponto"></div></div>
+        ${interj.length?`<div class="track"><span class="tlab" title="descanso entre jornadas — CLT mín. 11h">Descanso</span><div class="lane lane-rest" data-k="rest"></div></div>`:''}
         <div class="track"><span class="tlab">Direção</span><div class="lane" data-k="mov"></div></div>
         ${alertas.length?`<div class="track"><span class="tlab">Alertas</span><div class="lane lane-al" data-k="alertas"></div></div>`:''}
         ${ident.length?`<div class="track"><span class="tlab">Identificação</span><div class="lane" data-k="ident"></div></div>`:''}
@@ -1456,6 +1462,8 @@ function renderZoom(id){
   el.querySelector('.wtl-ruler').innerHTML=ruler;
   const laneP=el.querySelector('.lane[data-k="ponto"]');
   if(laneP) laneP.innerHTML=gl+(st.ponto||[]).map(p=>seg('ponto',p[0],p[1],hm(p[0]%1440)+'–'+hm(p[1]%1440))).join('');
+  const laneR=el.querySelector('.lane[data-k="rest"]');
+  if(laneR){ laneR.innerHTML=gl+(st.interj||[]).map(s=>{ const cls=s.viol?'rest viol':'rest'; const ttl='Descanso '+hDec(s.min)+' entre jornadas · '+brDate(s.day)+(s.viol?' · ⚠ abaixo de 11h (CLT)':' · ok ≥ 11h'); const bar=seg(cls,s.a,s.b,(s.viol?'⚠ '+hDec(s.min):hDec(s.min)),'',ttl); const p=pos(s.b); const mk=(s.viol&&p>=-1&&p<=101)?`<span class="rmark" style="left:${p}%" title="${ttl}">▾</span>`:''; return bar+mk; }).join(''); }
   const laneM=el.querySelector('.lane[data-k="mov"]');
   if(laneM) laneM.innerHTML=gl+(st.mov||[]).map(s=>{ const hr=hm(s.a%1440)+'–'+hm(s.b%1440); const lab=s.lab||((s.placa?s.placa+' · ':'')+hr); const ttl=lab+' · '+hm(s.b-s.a)+(s.unid?' · SEM identificação':' de condução')+(s.km?' · '+Math.round(s.km)+'km':''); return seg('mov',s.a,s.b,lab,s.unid?'unid':(s.fora?'fora':''),ttl); }).join('')+(st.almoco||[]).map(s=>seg('almoco',s.a,s.b,'almoço')).join('');
   const laneAl=el.querySelector('.lane[data-k="alertas"]');
