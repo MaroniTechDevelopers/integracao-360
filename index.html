@@ -648,6 +648,7 @@
         <div class="cf"><label>Almoço mínimo — pausa válida (min)</label><input type="number" id="cfgAlmoco" value="30" min="0"></div>
         <div class="cf"><label>Exige pausa acima de (h de jornada)</label><input type="number" id="cfgJornada" value="6" min="0" step="0.5"></div>
         <div class="cf"><label>Jornada padrão (min) — acima é hora extra</label><input type="number" id="cfgJornadaMin" value="440" min="0" step="5"></div>
+        <div class="cf"><label>Interjornada mínima (min) — descanso entre jornadas</label><input type="number" id="cfgInterjornada" value="660" min="0" step="10"></div>
       </div>
     </div>
 
@@ -973,7 +974,7 @@ function operacaoDaPlaca(placa){ if(!placa) return '';
 // operação da VIAGEM (Pedidos), pela placa + dia — mais precisa que a do veículo (a placa muda de operação por viagem)
 function opDaViagem(placas, data){ if(typeof PED_OP==='undefined'||!PED_OP) return ''; for(const p of (placas||[])){ if(!p) continue; const c=PED_OP[placaKey(p)+'|'+data]; if(c){ const f=opFamily(c); if(f && f!=='(não-operacional)') return f; } } return ''; }
 
-function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00,jornadaMin:440}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
+function loadCfg(){ const d={tol:20,sem:80,fora:15,movMin:5,farolAmareloMax:60,meta:2.40,almocoMin:30,jornadaMaxH:6,precoLitro:6.00,jornadaMin:440,interjornadaMin:660}; try{ return Object.assign(d, JSON.parse(localStorage.getItem(LS.cfg)||'{}')); }catch(e){ return d; } }
 function saveCfg(){ try{ localStorage.setItem(LS.cfg, JSON.stringify(CFG)); }catch(e){} }
 function loadData(){ try{ const d=JSON.parse(localStorage.getItem(LS.data)||'null'); return (d&&d.records)?d:null; }catch(e){ return null; } }
 function saveData(){ try{ localStorage.setItem(LS.data, JSON.stringify(RAW)); }catch(e){} }
@@ -1101,6 +1102,16 @@ function build(){
   RECORDS.forEach(r=>{ if(r.operacao && r.operacao!=='—'){ const k=norm(r.motoristaEscala); const g=(byDrv[k]=byDrv[k]||{}); g[r.operacao]=(g[r.operacao]||0)+(r.horasMov||1); } });
   const drvOp={}; for(const k in byDrv){ let best='',bv=-1; for(const op in byDrv[k]){ if(byDrv[k][op]>bv){bv=byDrv[k][op];best=op;} } if(best)drvOp[k]=best; }
   RECORDS.forEach(r=>{ const semVeic=!((r.placas&&r.placas.length)||r.placa); if((!r.operacao||r.operacao==='—') && semVeic && drvOp[norm(r.motoristaEscala)]) r.operacao=drvOp[norm(r.motoristaEscala)]; });
+  // INTERJORNADA (CLT 11h): descanso entre o fim de uma jornada e o início da próxima (por motorista, dias trabalhados consecutivos)
+  const jrn={}; RECORDS.forEach(r=>{ if(r.punches&&r.punches.length){ (jrn[r.motoristaEscala]=jrn[r.motoristaEscala]||[]).push(r); } });
+  for(const nm in jrn){ const L=jrn[nm].sort((a,b)=> a.data<b.data?-1:a.data>b.data?1:0);
+    for(let i=1;i<L.length;i++){ const p=L[i-1], c=L[i]; const pFim=p.punches[p.punches.length-1], cIni=c.punches[0];
+      const rest=Math.round((Date.parse(c.data)+cIni*60000-(Date.parse(p.data)+pFim*60000))/60000);
+      if(rest>0){ c.interjornada=rest; if(rest<CFG.interjornadaMin && !c.flags.some(f=>f.k==='interjornada')){
+        c.flags.push({sev:'atencao',k:'interjornada',t:'Descanso entre jornadas < 11h ('+hDec(rest)+')'});
+        c.sev = c.flags.some(f=>f.sev==='critico')?'critico':'atencao'; } }
+    }
+  }
   RECORDS.sort((a,b)=> a.data<b.data?1:a.data>b.data?-1:(a.operacao.localeCompare(b.operacao)) );
 }
 
@@ -1148,6 +1159,8 @@ function renderKpis(rows){
   const motsHex=new Set(rows.filter(r=>r.horaExtra>0).map(r=>r.motoristaEscala)).size;
   const movSemPonto=rows.filter(r=>r.movimento.length>0 && r.punches.length===0).length;
   const pontoSemMov=rows.filter(r=>r.punches.length>0 && r.movimento.length===0).length;
+  const interj=rows.filter(r=>r.interjornada!=null && r.interjornada<CFG.interjornadaMin).length;   // descanso < 11h
+  const motsInterj=new Set(rows.filter(r=>r.interjornada!=null && r.interjornada<CFG.interjornadaMin).map(r=>r.motoristaEscala)).size;
   // cobertura de ponto: dos dias com movimento, quantos têm ponto
   const movDays=rows.filter(r=>r.movimento.length>0).length;
   const cobPonto=movDays?Math.round((movDays-movSemPonto)/movDays*100):null;
@@ -1171,6 +1184,7 @@ function renderKpis(rows){
     {lab:'Cobertura de ponto',val:(cobPonto==null?'—':cobPonto+'<small>%</small>'),sub:'dias com movimento que têm ponto',ac:(cobPonto==null?'var(--muted)':(cobPonto>=90?'var(--good)':cobPonto>=70?'var(--warning)':'var(--critical)')),tab:'tabela'},
     {lab:'Movimento sem ponto',val:movSemPonto,sub:'dirigiu e não bateu ponto (pendência)',ac:'var(--critical)',tab:'diverg'},
     {lab:'Ponto sem movimento',val:pontoSemMov,sub:'bateu ponto e não dirigiu',ac:'var(--warning)',tab:'tabela'},
+    {lab:'Interjornada < 11h',val:interj,sub:motsInterj+' motorista(s) · descanso insuficiente',ac:interj>0?'var(--critical)':'var(--good)',tab:'diverg'},
     alertKpi
       ? {lab:'⚠ Alertas (câmera/telemetria)',val:alertKpi.tot.toLocaleString('pt-BR'),sub:(alertKpi.alto?alertKpi.alto+' motorista(s) c/ nível alto':alertKpi.nmot+' motorista(s) c/ alerta'),ac:'var(--s7)',tab:'linha'}
       : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)',tab:'media'},
@@ -1311,7 +1325,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
   const groups=Object.values(grp).sort((a,b)=> a.gkey<b.gkey?1:a.gkey>b.gkey?-1:a.nome.localeCompare(b.nome));
   const shown=groups.slice(0,cap); const ids=[]; const noun=mode==='fecha'?'períodos':(mode==='dia'?'dias':'semanas'); const zoomTxt=mode==='dia'?'dia → horas':(mode==='fecha'?'período → dia → horas':'semana → dia → horas');
   const html=shown.map((g,i)=>{
-    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0; const placas=new Set(), dias=new Set(), ops=new Set();
+    const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,restMin=null,restViol=0; const placas=new Set(), dias=new Set(), ops=new Set();
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data); if(r.operacao&&r.operacao!=='—')ops.add(r.operacao);
       for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
@@ -1321,6 +1335,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       (r.almocoDrivenSegs||[]).forEach(s=>almoco.push({a:off+s.ini,b:off+s.fim}));
       alertsForRec(r).forEach(al=>{ alertas.push({t:off+al.t,niv:al.niv,tipo:al.tipo}); if(al.niv==='A')nAlto++; });
       dd+=r.horasDedoDuro||0; hpon+=r.horasPonto||0; hcond+=r.horasMov||0; hex+=r.horaExtra||0;
+      if(r.interjornada!=null){ restMin=(restMin==null)?r.interjornada:Math.min(restMin,r.interjornada); if(r.interjornada<CFG.interjornadaMin) restViol++; }
     });
     const identPct = aderRecs(g.recs);   // ponderado pelo tempo (reflete o vermelho da trilha)
     ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, ident, t0:0, t1:g.total, total:g.total};
@@ -1332,6 +1347,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       <div class="m"><span>h condução</span><b style="color:${hcond>hpon+CFG.tol?'var(--serious)':'inherit'}">${hcond?hDec(hcond):'—'}</b></div>
       <div class="m"><span>Hora extra</span><b style="color:${hex>0?'var(--warning)':'inherit'}">${hex>0?hDec(hex):'—'}</b></div>
       <div class="m"><span>Fora da jornada</span><b style="color:${dd>0?'var(--serious)':'inherit'}">${dd>0?hDec(dd):'—'}</b></div>
+      <div class="m"><span title="menor descanso entre jornadas no período (CLT: mín. 11h)">Descanso mín${restViol?' ⚠':''}</span><b style="color:${restMin==null?'var(--muted)':(restMin<CFG.interjornadaMin?'var(--critical)':'var(--good-ink)')}" title="${restViol?restViol+' dia(s) com descanso < 11h':''}">${restMin==null?'—':hDec(restMin)}</b></div>
       <div class="m"><span title="aderência da identificação facial na Trimble">Identif.</span><b style="color:${identPct==null?'var(--muted)':(identPct>=CFG.sem?'var(--good)':'var(--critical)')}">${identPct==null?'—':identPct+'%'}</b></div>
       ${alertas.length?`<div class="m"><span>Alertas</span><b style="color:${nAlto>0?'var(--critical)':'var(--warning)'}">${alertas.length}${nAlto?' · '+nAlto+' alto':''}</b></div>`:''}
       <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div>
@@ -1584,7 +1600,9 @@ function fichaMetrics(nome){
   const risco=riscoComposto({ident:semel, media:mediaR, meta:metaFicha, ddReal:ddRealTotal}, alR);
   const condDiv=recs.filter(r=>r.idDivergente||r.condutorDivergente).length;
   const diasComMov=recs.filter(r=>r.primMov!=null).length;
-  return {nome,recs,d,adm,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,aderJornadaVal,op,placas,alR,totAl,tempo,kmR,litrosR,abF,mediaR,metaFicha,medaOk,reco,risco,condDiv,diasComMov};
+  const interjViol=recs.filter(r=>r.interjornada!=null && r.interjornada<CFG.interjornadaMin).length;
+  const restMinF=recs.reduce((m,r)=>(r.interjornada!=null?(m==null?r.interjornada:Math.min(m,r.interjornada)):m),null);
+  return {nome,recs,d,adm,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,aderJornadaVal,op,placas,alR,totAl,tempo,kmR,litrosR,abF,mediaR,metaFicha,medaOk,reco,risco,condDiv,diasComMov,interjViol,restMinF};
 }
 // pontos críticos e positivos p/ o relatório executivo
 function fichaPontos(M){
@@ -1606,6 +1624,7 @@ function fichaPontos(M){
     else pos.push(`Média <b>${nf(M.mediaR)}</b> km/l dentro da meta (${nf(M.metaFicha)}).`);
   }
   if(M.hexTotal>0) crit.push(`Horas extras: <b>${hDec(M.hexTotal)}</b> em ${M.diasHex} dia(s) acima de 7h20 de jornada.`);
+  if(M.interjViol>0) crit.push(`Descanso entre jornadas &lt; 11h em <b>${M.interjViol}</b> dia(s)${M.restMinF!=null?' (mín '+hDec(M.restMinF)+')':''} — atenção à interjornada (CLT).`);
   else pos.push(`Sem horas extras acima da jornada.`);
   const anos=/(\d+)\s*ano/.test(M.tempo)?+RegExp.$1:0;
   if(anos>=2) pos.push(`<b>${M.tempo}</b> de casa — histórico consolidado.`);
@@ -1624,6 +1643,7 @@ function planoDeAcao(M){
   if(alto>0) acoes.push({ic:'🎓',t:'Feedback / direção segura',d:`${alto} excesso(s) de velocidade em nível alto — dar feedback ao condutor e acompanhar na próxima semana.`});
   if(M.mediaR!=null && !M.medaOk) acoes.push({ic:'⛽',t:'Plano de consumo',d:`Média ${nf(M.mediaR)} < meta ${nf(M.metaFicha)} — orientar direção econômica e comparar na próxima medição.`});
   if(M.hexTotal>0) acoes.push({ic:'⏱️',t:'Ajustar escala',d:`${hDec(M.hexTotal)} de hora extra em ${M.diasHex} dia(s) — validar/adequar a jornada com a operação.`});
+  if(M.interjViol>0) acoes.push({ic:'🛌',t:'Garantir descanso entre jornadas',d:`${M.interjViol} dia(s) com menos de 11h de descanso entre jornadas — revisar a escala p/ cumprir a interjornada (CLT).`});
   if(!acoes.length) acoes.push({ic:'✅',t:'Manter monitoramento',d:'Sem ação corretiva necessária no período — seguir acompanhando os indicadores.'});
   return acoes;
 }
@@ -1899,7 +1919,7 @@ function exportPainelPDF(){
 /* ============================================================
    RENDER — DIVERGÊNCIAS
    ============================================================ */
-const DIV_TIPOS={mov_sem_ponto:'Ponto a registrar', id_diverg:'Condutor a confirmar', condutor_nao_vinc:'Vínculo condutor × placa a confirmar', dedo_duro:'Condução fora do horário do ponto', hora_extra:'Jornada além de 7h20', almoco_dirigido:'Pausa de almoço a conferir', sem_pausa:'Sem pausa de almoço registrada', mov_antes_entrada:'Início antes de bater a entrada', semelhanca_baixa:'Cadastro facial a revisar', sem_mov:'Praticamente sem movimento', mov_nao_enc:'Movimentação não encontrada', id_nao_enc:'Identificação não encontrada'};
+const DIV_TIPOS={mov_sem_ponto:'Ponto a registrar', id_diverg:'Condutor a confirmar', condutor_nao_vinc:'Vínculo condutor × placa a confirmar', dedo_duro:'Condução fora do horário do ponto', hora_extra:'Jornada além de 7h20', almoco_dirigido:'Pausa de almoço a conferir', sem_pausa:'Sem pausa de almoço registrada', mov_antes_entrada:'Início antes de bater a entrada', interjornada:'Descanso < 11h entre jornadas', semelhanca_baixa:'Cadastro facial a revisar', sem_mov:'Praticamente sem movimento', mov_nao_enc:'Movimentação não encontrada', id_nao_enc:'Identificação não encontrada'};
 function tipoDivKey(f){ return f.k || norm(String(f.t||'').replace(/[:(].*$/,'')); }
 function tipoDivLabel(k){ return DIV_TIPOS[k] || k; }
 function renderDiverg(rows){
@@ -3147,7 +3167,7 @@ $('#expSaude').onclick=exportSaude;
 $('#expSemId').onclick=exportSemId;
 // config
 function bindCfg(id,key){ const el=$(id); el.value=CFG[key]; el.addEventListener('input',()=>{ CFG[key]=parseFloat(el.value)||0; saveCfg(); build(); fillFilters(); renderAll(); }); }
-bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgPreco','precoLitro'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH'); bindCfg('#cfgJornadaMin','jornadaMin');
+bindCfg('#cfgTol','tol'); bindCfg('#cfgSem','sem'); bindCfg('#cfgFora','fora'); bindCfg('#cfgMovMin','movMin'); bindCfg('#cfgFarol','farolAmareloMax'); bindCfg('#cfgMeta','meta'); bindCfg('#cfgPreco','precoLitro'); bindCfg('#cfgAlmoco','almocoMin'); bindCfg('#cfgJornada','jornadaMaxH'); bindCfg('#cfgJornadaMin','jornadaMin'); bindCfg('#cfgInterjornada','interjornadaMin');
 // import
 $('#filePonto').addEventListener('change',e=>{ if(e.target.files[0]){ toast('Lendo jornada…'); readFile(e.target.files[0],rows=>{ pending.ponto=rows; updateDropStatus(); if(pending.mov) ingest(); }); } });
 $('#fileMov').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return;
