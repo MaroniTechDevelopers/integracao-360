@@ -2944,10 +2944,11 @@ async function spLoadAll(interactive){
   let site, items;
   try{
     site=await gget('/sites/'+SP_CFG.siteHost+':'+SP_CFG.sitePath, token);
-    items=await gget('/sites/'+site.id+'/drive/root:/'+encodeURIComponent(SP_CFG.folder)+':/children?$top=200&$select=name,id,lastModifiedDateTime,file,@microsoft.graph.downloadUrl', token);
+    items=await gget('/sites/'+site.id+'/drive/root:/'+encodeURIComponent(SP_CFG.folder)+':/children?$top=200', token);
   }catch(e){ toast('Erro no SharePoint — '+e.message); setPill('erro no SharePoint'); return false; }
-  const files=(items.value||[]).filter(f=>f.file&&f['@microsoft.graph.downloadUrl']);
-  if(!files.length){ toast('Pasta vazia (ou sem acesso)'); return false; }
+  const brutos=(items.value||[]);
+  const files=brutos.filter(f=>f.file&&f['@microsoft.graph.downloadUrl']);
+  if(!files.length){ toast('Pasta sem arquivos utilizáveis — '+brutos.length+' item(ns) na pasta'); return false; }
   const byType={};
   for(const f of files){ const ext=(f.name.split('.').pop()||'').toLowerCase(); let header=''; if(ext==='csv'||ext==='txt') header=await spHead(f['@microsoft.graph.downloadUrl']);
     const t=detectTipo(f.name, header, ext); if(!t) continue; if(!byType[t] || f.lastModifiedDateTime>byType[t].lastModifiedDateTime) byType[t]=f; }
