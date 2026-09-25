@@ -2920,7 +2920,7 @@ async function gget(path, token){
   if(!r.ok){ const t=await r.text().catch(()=>''); throw new Error('Graph '+r.status+(t?': '+t.slice(0,180):'')); }
   return r.json();
 }
-async function spHead(url){ try{ const buf=await fetch(url).then(r=>r.arrayBuffer()); const txt=decodeText(buf); const nl=txt.indexOf('\n'); return norm(nl<0?txt:txt.slice(0,nl)); }catch(e){ return ''; } }
+async function spHead(url){ try{ let r=await fetch(url,{headers:{Range:'bytes=0-8191'}}); if(!r.ok && r.status!==206) r=await fetch(url); const buf=await r.arrayBuffer(); const txt=decodeText(buf); const nl=txt.indexOf('\n'); return norm(nl<0?txt:txt.slice(0,nl)); }catch(e){ return ''; } }
 function detectTipo(name, header, ext){
   const n=norm(name), h=header||'';
   if(ext==='xlsx'||ext==='xls'){ if(/ABASTEC/.test(n)) return 'abast'; if(/MEDIA|META/.test(n)) return 'metas'; if(/CAVALO|CAMERA|SAUDE|\bCAM\b/.test(n)) return 'saude'; return null; }
@@ -2938,14 +2938,15 @@ function detectTipo(name, header, ext){
 function spGrab(f){ return fetch(f['@microsoft.graph.downloadUrl']).then(r=>r.arrayBuffer()).then(ab=>new File([ab], f.name)); }
 function readFileP(file){ return new Promise(res=>readFile(file,res)); }
 // varre uma pasta e TODAS as subpastas (tipo→ano→mês→dia), juntando os arquivos
-async function spWalk(siteId, folderId, token, acc, depth){
+// cada arquivo guarda em _top o nome da pasta de 1º nível (o "tipo") p/ identificar sem baixar
+async function spWalk(siteId, folderId, token, acc, depth, top){
   acc=acc||[]; if(depth>7) return acc;
   let url='/sites/'+siteId+'/drive/items/'+folderId+'/children?$top=200';
   while(url){
     const j=await gget(url.replace('https://graph.microsoft.com/v1.0',''), token);
     for(const it of (j.value||[])){
-      if(it.folder) await spWalk(siteId, it.id, token, acc, depth+1);
-      else if(it.file && it['@microsoft.graph.downloadUrl']) acc.push(it);
+      if(it.folder) await spWalk(siteId, it.id, token, acc, depth+1, depth===0?it.name:top);
+      else if(it.file && it['@microsoft.graph.downloadUrl']){ it._top=top||''; acc.push(it); }
     }
     url=j['@odata.nextLink']||'';
   }
@@ -2960,6 +2961,8 @@ async function spEnsureFolder(siteId, parentId, name, token){
   return r.id;
 }
 const SP_ESTRUTURA=['01 - Jornada (Ponto)','02 - Movimentacao (Trimble)','03 - Alertas','04 - Boletim do Motorista','05 - Boletim do Veiculo','06 - Saude das Cameras','07 - Motoristas','08 - Veiculos (TMS)','09 - Pedidos','10 - Abastecimento','11 - Metas'];
+// pasta de 1º nível (SP_ESTRUTURA) → tipo de relatório (evita baixar p/ detectar)
+const SP_TOP2TIPO={}; ['jornada','mov','alertas','boletim','bdv','saude','motoristas','tms','pedidos','abast','metas'].forEach((t,i)=>{ SP_TOP2TIPO[SP_ESTRUTURA[i]]=t; });
 async function spCriarEstrutura(){
   if(!spSignedIn()){ toast('Entre com a Microsoft primeiro'); return; }
   let token; try{ token=await spToken(true); }catch(e){ toast('Login: '+(e.message||'')); return; }
@@ -2983,12 +2986,16 @@ async function spLoadAll(interactive){
   try{
     site=await gget('/sites/'+SP_CFG.siteHost+':'+SP_CFG.sitePath, token);
     const rootItem=await gget('/sites/'+site.id+'/drive/root:/'+encodeURIComponent(SP_CFG.folder), token);
-    files=await spWalk(site.id, rootItem.id, token, [], 0);   // varre a pasta + subpastas (tipo/ano/mês/dia)
+    files=await spWalk(site.id, rootItem.id, token, [], 0, '');   // varre a pasta + subpastas (tipo/ano/mês/dia)
   }catch(e){ toast('Erro no SharePoint — '+e.message); setPill('erro no SharePoint'); return false; }
   if(!files.length){ toast('Nenhum arquivo encontrado na pasta/subpastas'); return false; }
+  files.sort((a,b)=> String(b.lastModifiedDateTime||'').localeCompare(String(a.lastModifiedDateTime||'')));  // mais novo primeiro
   const byType={};
-  for(const f of files){ const ext=(f.name.split('.').pop()||'').toLowerCase(); let header=''; if(ext==='csv'||ext==='txt') header=await spHead(f['@microsoft.graph.downloadUrl']);
-    const t=detectTipo(f.name, header, ext); if(!t) continue; if(!byType[t] || f.lastModifiedDateTime>byType[t].lastModifiedDateTime) byType[t]=f; }
+  for(const f of files){
+    let t=SP_TOP2TIPO[f._top]||'';                 // pela pasta de tipo (sem baixar)
+    if(!t){ const ext=(f.name.split('.').pop()||'').toLowerCase(); let header=''; if(ext==='csv'||ext==='txt') header=await spHead(f['@microsoft.graph.downloadUrl']); t=detectTipo(f.name, header, ext); }
+    if(!t) continue; if(!byType[t]) byType[t]=f;   // ordenado por data → o 1º de cada tipo é o mais recente
+  }
   const achou=Object.keys(byType);
   if(!achou.length){ toast('Nenhum relatório reconhecido na pasta ('+files.length+' arquivo(s))'); return false; }
   toast('Baixando '+achou.length+' relatório(s)…');
