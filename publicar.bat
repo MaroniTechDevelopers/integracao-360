@@ -10,6 +10,6 @@ git commit -m "Atualizacao do painel Pulso 360"
 git push origin main
 echo.
 echo Pronto. Em ~1 minuto a atualizacao aparece em:
-echo    https://maronitechdevelopers.github.io/pulso-360/
+echo    https://maronitechdevelopers.github.io/integracao-360/
 echo.
 pause

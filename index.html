@@ -2891,7 +2891,7 @@ function baixarCsv(lines,nome){
 const SP_CFG = {
   clientId:'42461f0c-08c1-48dd-a12b-b891c8747427',
   tenantId:'8babaf2b-248f-4651-98d6-1e5312fbe00a',
-  redirectUri:'https://maronitechdevelopers.github.io/pulso-360/',
+  redirectUri:'https://maronitechdevelopers.github.io/integracao-360/',
   siteHost:'grupotransmaroni.sharepoint.com',
   sitePath:'/sites/gestao.desenvolvimento',
   folder:'Relatório Pulso 360',
@@ -3102,7 +3102,7 @@ function mostrarLinkSnapshot(link, mb){
   let bg=document.getElementById('snapModal'); if(bg) bg.remove();
   bg=document.createElement('div'); bg.id='snapModal'; bg.className='modal-bg'; bg.style.display='flex';
   bg.innerHTML='<div class="modal" style="max-width:620px"><h3>🔗 Link compartilhável gerado</h3>'+
-    '<p class="modal-sub"><b>1)</b> O arquivo <b>dados.enc</b> ('+mb+' MB) foi baixado — coloque-o na pasta <b>pulso-360</b> e rode o <b>publicar.bat</b>.<br><b>2)</b> Compartilhe este link (ele contém a chave; só quem tiver o link vê os dados):</p>'+
+    '<p class="modal-sub"><b>1)</b> O arquivo <b>dados.enc</b> ('+mb+' MB) foi baixado — coloque-o na pasta <b>integracao-360</b> e rode o <b>publicar.bat</b>.<br><b>2)</b> Compartilhe este link (ele contém a chave; só quem tiver o link vê os dados):</p>'+
     '<input type="text" id="snapLink" readonly value="'+link+'">'+
     '<div class="modal-actions"><button class="btn" id="snapClose" style="color:var(--ink);background:var(--surface);border-color:var(--border)">Fechar</button><button class="btn solid" id="snapCopy">Copiar link</button></div></div>';
   document.body.appendChild(bg);
