@@ -2923,7 +2923,7 @@ async function spHead(url){ try{ const buf=await fetch(url).then(r=>r.arrayBuffe
 function detectTipo(name, header, ext){
   const n=norm(name), h=header||'';
   if(ext==='xlsx'||ext==='xls'){ if(/ABASTEC/.test(n)) return 'abast'; if(/MEDIA|META/.test(n)) return 'metas'; if(/CAVALO|CAMERA|SAUDE|\bCAM\b/.test(n)) return 'saude'; return null; }
-  if(ext==='zip') return 'mov';
+  if(ext==='zip'){ if(/ALERTA/.test(n)) return 'alertas'; if(/CONSOLIDAD|MOVIMENT|HISTORICO_CONS/.test(n)) return 'mov'; return 'mov'; }
   if(h.includes('ENTRADA 1')||h.includes('SAIDA 1')) return 'jornada';
   if(h.includes('SEM MOTORISTA')&&h.includes('PLACA')) return 'bdv';
   if(h.includes('DATA ADMISSAO')) return 'motoristas';
