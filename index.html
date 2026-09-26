@@ -193,6 +193,11 @@
   .wtl-ruler .tick.day{color:var(--ink-2);font-weight:600}
   .wtl-ruler .tick.feriado{color:var(--critical);font-weight:700}
   .wtl-ruler .tick i{position:absolute;top:13px;left:50%;width:1px;height:6px;background:var(--baseline)}
+  /* rótulo do dia (fixo, centralizado sobre as horas) — aparece ao dar zoom num dia */
+  .wtl-day{position:relative;height:0;display:none}
+  .wtl-day.on{display:block;height:22px}
+  .wtl-day span{position:absolute;left:calc(50% + 42px);transform:translateX(-50%);top:0;font-size:12px;font-weight:700;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:2px 12px;white-space:nowrap;z-index:6;box-shadow:0 1px 3px rgba(0,0,0,.10)}
+  .wtl-day span.feriado{color:var(--critical);border-color:color-mix(in srgb,var(--critical) 40%,var(--border))}
   .wtl .lane .gl.day{background:var(--baseline);width:2px}
   /* marcadores de alerta no horário exato (linha do tempo) — ícone por tipo + haste por severidade */
   .lane.lane-al{height:24px;background:var(--surface-2);overflow:visible}
@@ -1358,7 +1363,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
     ZTL[id]={weekStart:g.start, ponto, mov, almoco, alertas, ident, interj, t0:0, t1:g.total, total:g.total};
     const opsArr=[...ops]; const opTxt=opsArr.join(', ')||'—';
     const meta=`<div class="meta">
-      <div class="m"><span>${mode==='fecha'?'Fechamento':(mode==='dia'?'Dia':'Semana')}</span><b>${g.label}</b></div>
+      ${showNome!==false?`<div class="m"><span>${mode==='fecha'?'Fechamento':(mode==='dia'?'Dia':'Semana')}</span><b>${g.label}</b></div>`:''}
       <div class="m"><span>Operação${opsArr.length>1?' ⚠':''}</span><b style="color:${opsArr.length>1?'var(--serious)':'inherit'}" title="${opsArr.length>1?'rodou em '+opsArr.length+' operações no período':''}">${opTxt}</b></div>
       <div class="m"><span>h ponto</span><b>${hpon?hDec(hpon):'—'}</b></div>
       <div class="m"><span>h condução</span><b style="color:${hcond>hpon+CFG.tol?'var(--serious)':'inherit'}">${hcond?hDec(hcond):'—'}</b></div>
@@ -1374,6 +1379,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
       : `<div class="tl-head"><div class="who"><b>${g.label}</b><small>${[...placas].join(', ')||'—'}</small></div>${meta}</div>`;
     return `<div class="card wtl-card">${head}
       <div class="wtl" id="${id}">
+        <div class="wtl-day"></div>
         <div class="wtl-ruler"></div>
         <div class="track"><span class="tlab">Ponto</span><div class="lane lane-pt" data-k="ponto"></div></div>
         <div class="track"><span class="tlab">Direção</span><div class="lane" data-k="mov"></div></div>
@@ -1426,6 +1432,7 @@ function buildPlacaCards(placaQ, prefix, cap){
       <div class="m"><span>Km</span><b>${km?Math.round(km).toLocaleString('pt-BR'):'—'}</b></div></div>`;
     return `<div class="card wtl-card"><div class="tl-head"><div class="who"><b>🚚 ${g.placa}</b><small>${[...drivers].map(firstName).join(', ')||'⚠ sem condutor identificado'}</small></div>${meta}</div>
       <div class="wtl" id="${id}">
+        <div class="wtl-day"></div>
         <div class="wtl-ruler"></div>
         <div class="track"><span class="tlab">Direção</span><div class="lane" data-k="mov"></div></div>
         <div class="track"><span class="tlab">Identificação</span><div class="lane" data-k="ident"></div></div>
@@ -1470,6 +1477,16 @@ function renderZoom(id){
     const lab = dayMode? fmtDay(st.weekStart,dIdx) : ((day?fmtDay(st.weekStart,dIdx)+' ':'')+hm(mod));
     ruler+=`<span class="tick ${day?'day':''} ${vermelho?'feriado':''}" style="left:${p}%"${vermelho?' title="'+(isDomingo(diso)?'Domingo':'Feriado nacional')+'"':''}>${lab}<i></i></span>`;
     gl+=`<div class="gl ${t%1440===0?'day':''}" style="left:${p}%"></div>`; }
+  // rótulo do dia fixo/centralizado quando o zoom está em ~1 dia (a data some da régua entre meia-noites)
+  const diaHdr=el.querySelector('.wtl-day');
+  if(diaHdr){
+    if(span<=1440*1.5){
+      const mid=(st.t0+st.t1)/2, dIdx=Math.floor(mid/1440);
+      const diso=new Date(Date.parse(st.weekStart)+dIdx*86400000).toISOString().slice(0,10); const verm=diaVermelho(diso);
+      diaHdr.innerHTML=`<span class="${verm?'feriado':''}">${brDate(diso)}${verm?(isDomingo(diso)?' · Domingo':' · Feriado'):''}</span>`;
+      diaHdr.classList.add('on');
+    } else { diaHdr.innerHTML=''; diaHdr.classList.remove('on'); }
+  }
   const seg=(cls,a,b,lab,extra,ttl)=>{ const l=pos(a),r=pos(b); if(r<0||l>100) return ''; const L=Math.max(l,0),W=Math.max(Math.min(r,100)-L,0.3); return `<div class="seg ${cls} ${extra||''}" style="left:${L}%;width:${W}%" title="${ttl||lab||''}">${(r-l)>4?(lab||''):''}</div>`; };
   el.querySelector('.wtl-ruler').innerHTML=ruler;
   const laneP=el.querySelector('.lane[data-k="ponto"]');
