@@ -1197,7 +1197,8 @@ function renderKpis(rows){
   let alertKpi=null;
   if(ALERTS||BOL){ const rng=activeRange(); let tot=0,alto=0,nmot=0; motSet.forEach(m=>{ const a=alertasResumo(m, rng); if(a&&a.total){ tot+=a.total; nmot++; if(a.niveis&&a.niveis.ALTO)alto++; } }); alertKpi={tot,alto,nmot}; }
   // ① Identificação (aderência da câmera) da seleção atual — ponderada pelas horas de condução
-  const identSel = aderRecs(rows);   // aderência ponderada pelo tempo (min identificados ÷ min total)
+  const _motF = $('#fMot').value || $('#fBusca').value;
+  const identSel = _motF ? aderRecs(rows) : (identFrotaPlacas()!=null ? identFrotaPlacas() : aderRecs(rows));   // frota = MESMA base da aba Aderência (por placa); motorista filtrado = registros dele
   // Placas OK × placas p/ ação (equipamento) — pela identificação (PLACA_MOV); respeita o filtro de operação
   let placOk=null, placAcao=null, placZero=null;
   if(typeof PLACA_MOV!=='undefined' && PLACA_MOV){ const opF=$('#fOp').value; placOk=0; placAcao=0; placZero=0;
@@ -1913,7 +1914,8 @@ function exportPainelPDF(){
   const movDays=rows.filter(r=>r.horasMov>=CFG.movMin).length;
   const cobPonto=movDays?Math.round((movDays-movSemPonto)/movDays*100):null;
   const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
-  const identSel=aderRecs(rows);   // ponderado pelo tempo
+  const _motFp = $('#fMot').value || $('#fBusca').value;
+  const identSel = _motFp ? aderRecs(rows) : (identFrotaPlacas()!=null ? identFrotaPlacas() : aderRecs(rows));   // frota = base por placa (bate com a tela)
   const ajP=aderJornada(rows);     // aderência de jornada (score positivo)
   let alertTot=0,alertAlto=0; if(ALERTS||BOL){ const rng=activeRange(); motSet.forEach(m=>{ const a=alertasResumo(m,rng); if(a&&a.total){ alertTot+=a.total; if(a.niveis&&a.niveis.ALTO)alertAlto++; } }); }
   // placas OK × ação
@@ -2439,6 +2441,10 @@ function aderMotoristaRecs(recs){ let meu=0,tot=0; (recs||[]).forEach(r=>{ meu+=
   let s=0,n=0; (recs||[]).forEach(r=>{ if(r.semelhanca!=null){ s+=r.semelhanca; n++; } }); return n?Math.round(s/n):null; }
 // ADERÊNCIA DE JORNADA (score positivo): % da condução que ocorreu DENTRO da janela do ponto (100% = jornada certinha)
 function aderJornada(recs){ let cond=0,fora=0; (recs||[]).forEach(r=>{ if(r.punches&&r.punches.length){ cond+=(r.horasMov||0); fora+=(r.ddReal||0); } }); return cond>0? Math.max(0,Math.round((cond-fora)/cond*100)) : null; }
+// identificação da FROTA — MESMA base da aba Aderência (por placa, PLACA_MOV, filtrada por operação):
+// conta TODO o movimento (identificado + não identificado), inclusive dias 100% sem identificação — número honesto e reconciliado
+function identFrotaPlacas(){ if(typeof PLACA_MOV==='undefined' || !PLACA_MOV) return null; const opF=$('#fOp').value; let idn=0,tot=0;
+  for(const pk in PLACA_MOV){ const g=PLACA_MOV[pk]; if(!g.tot) continue; if(opF && operacaoDaPlaca(pk)!==opF) continue; tot+=g.tot; idn+=(g.idn||0); } return tot>0? Math.round(idn/tot*100) : null; }
 function ajColor(v){ return v==null?'var(--muted)':(v>=90?'var(--good)':(v>=70?'var(--warning)':'var(--critical)')); }
 // JORNADA (ponto): batidas em colunas Entrada N / Saída N, por (motoristaNorm|dia)
 function parseJornada(P){
