@@ -1019,10 +1019,13 @@ function analyze(rec){
   const placasR = (rec.placas&&rec.placas.length)?rec.placas:(rec.placa?[rec.placa]:[]);
   let opPlaca=''; for(const p of placasR){ opPlaca=operacaoDaPlaca(p); if(opPlaca) break; }
   const operacao = opPlaca || opDaViagem(placasR, rec.data) || ((rec.operacao && rec.operacao!=='—') ? rec.operacao : '—');
-  // --- ponto: intervalos trabalhados = pares consecutivos ---
-  const punches=(rec.ponto||[]).map(toMin).filter(v=>v!=null).sort((a,b)=>a-b);
-  let entrada=punches.length?punches[0]:null, saida=punches.length?punches[punches.length-1]:null;
-  let horasPonto=0; for(let i=0;i+1<punches.length;i+=2) horasPonto+=punches[i+1]-punches[i];
+  // --- ponto: batidas em ORDEM cronológica; desdobra a virada de meia-noite (NÃO ordenar — quebraria turno noturno) ---
+  const rawP=(rec.ponto||[]).map(toMin).filter(v=>v!=null);
+  const seqP=[]; { let add=0; for(let i=0;i<rawP.length;i++){ let v=rawP[i]+add; if(i>0 && v<seqP[i-1]){ add+=1440; v=rawP[i]+add; } seqP.push(v); } }
+  const punches=rawP;   // p/ a linha do tempo (eixo 0–24h do dia)
+  let entrada=rawP.length?rawP[0]:null, saida=rawP.length?rawP[rawP.length-1]:null;   // início/fim reais (exibição, minuto do dia)
+  const entradaU=seqP.length?seqP[0]:null, saidaU=seqP.length?seqP[seqP.length-1]:null;   // desdobrados (podem passar de 24h no turno noturno)
+  let horasPonto=0; for(let i=0;i+1<seqP.length;i+=2) horasPonto+=seqP[i+1]-seqP[i];   // = Total Trabalhado do relatório (confere 99,8%)
   // --- movimentação ---
   const mov=(rec.movimento||[]).map(s=>({ini:toMin(s.ini),fim:toMin(s.fim),km:+s.km||0,litros:+s.litros||0,placa:s.placa||''})).filter(s=>s.ini!=null&&s.fim!=null&&s.fim>=s.ini);
   const movUnid=(rec.movUnid||[]).map(s=>({ini:toMin(s.ini),fim:toMin(s.fim)})).filter(s=>s.ini!=null&&s.fim!=null&&s.fim>=s.ini);
@@ -1043,16 +1046,16 @@ function analyze(rec){
 
   // --- janela da jornada p/ "fora da jornada" ---
   let foraJornada=0;
-  if(entrada!=null&&saida!=null){
-    const lo=entrada-tol, hi=saida+tol;
+  if(entradaU!=null&&saidaU!=null){
+    const lo=entradaU-tol, hi=saidaU+tol;   // janela desdobrada (cobre turno noturno)
     mov.forEach(s=>{ if(s.ini<lo) foraJornada+=Math.min(s.fim,lo)-s.ini; if(s.fim>hi) foraJornada+=s.fim-Math.max(s.ini,hi); });
     foraJornada=Math.max(0,foraJornada);
   }
 
   // --- ALMOÇO: pausas entre pares trabalhados; a maior pausa >= almocoMin é o almoço ---
-  const breaks=[]; for(let i=1;i+1<punches.length;i+=2) breaks.push([punches[i],punches[i+1]]);
+  const breaks=[]; for(let i=1;i+1<seqP.length;i+=2) breaks.push([seqP[i],seqP[i+1]]);
   const lunch = breaks.filter(b=>b[1]-b[0]>=CFG.almocoMin).sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]))[0]||null;
-  const jornadaSpan = (entrada!=null&&saida!=null)?(saida-entrada):0;
+  const jornadaSpan = (entradaU!=null&&saidaU!=null)?(saidaU-entradaU):0;
   // caso A: marcou almoço mas dirigiu na pausa → interseção movimento × janela do almoço
   let almocoDrivenSegs=[], almocoDirigido=0;
   if(lunch){ const [ls,le]=lunch; mov.forEach(s=>{ const a=Math.max(s.ini,ls),b=Math.min(s.fim,le); if(b>a){almocoDrivenSegs.push({ini:a,fim:b});almocoDirigido+=b-a;} }); }
@@ -1108,7 +1111,7 @@ function analyze(rec){
 
   return Object.assign({}, rec, {
     operacao,
-    punches, entrada, saida, horasPonto, mov, movUnid, horasMov, km, litros, media, primMov, ultMov,
+    punches, entrada, saida, entradaU, saidaU, horasPonto, mov, movUnid, horasMov, km, litros, media, primMov, ultMov,
     segs, trimbleMot, semelhanca, foraJornada, horasDedoDuro, ddReal, horaExtra, condutorDivergente, condutorPlan, flags, sev,
     semana: isoWeek(rec.data), semKey:wi.key, mesKey:wi.mesKey, mesLabel:wi.mesLabel,
     pend: flags.filter(f=>f.sev==='pendente').length,
@@ -1135,7 +1138,9 @@ function build(){
   // INTERJORNADA (CLT 11h): descanso entre o fim de uma jornada e o início da próxima (por motorista, dias trabalhados consecutivos)
   const jrn={}; RECORDS.forEach(r=>{ if(r.punches&&r.punches.length){ (jrn[r.motoristaEscala]=jrn[r.motoristaEscala]||[]).push(r); } });
   for(const nm in jrn){ const L=jrn[nm].sort((a,b)=> a.data<b.data?-1:a.data>b.data?1:0);
-    for(let i=1;i<L.length;i++){ const p=L[i-1], c=L[i]; const pFim=p.punches[p.punches.length-1], cIni=c.punches[0];
+    for(let i=1;i<L.length;i++){ const p=L[i-1], c=L[i];
+      const pFim=(p.saidaU!=null?p.saidaU:p.punches[p.punches.length-1]);   // fim desdobrado (turno noturno cai no dia seguinte)
+      const cIni=(c.entrada!=null?c.entrada:c.punches[0]);
       const rest=Math.round((Date.parse(c.data)+cIni*60000-(Date.parse(p.data)+pFim*60000))/60000);
       if(rest>0){ c.interjornada=rest; if(rest<CFG.interjornadaMin && !c.flags.some(f=>f.k==='interjornada')){
         c.flags.push({sev:'atencao',k:'interjornada',t:'Descanso entre jornadas < 11h ('+hDec(rest)+')'});
@@ -1361,7 +1366,7 @@ function buildWeekCards(rows, prefix, cap, showNome, mode){
   const html=shown.map((g,i)=>{
     const id=prefix+i; ids.push(id); const ponto=[],mov=[],almoco=[],alertas=[],ident=[],interj=[]; let dd=0,km=0,hpon=0,hcond=0,hex=0,nAlto=0,restMin=null,restViol=0; const placas=new Set(), dias=new Set(), ops=new Set();
     g.recs.forEach(r=>{ const dIdx=Math.round((Date.parse(r.data)-Date.parse(g.start))/86400000); const off=dIdx*1440; dias.add(r.data); if(r.operacao&&r.operacao!=='—')ops.add(r.operacao);
-      for(let j=0;j+1<r.punches.length;j+=2) ponto.push([off+r.punches[j],off+r.punches[j+1]]);
+      for(let j=0;j+1<r.punches.length;j+=2){ const a=r.punches[j], b=r.punches[j+1]; if(b>=a) ponto.push([off+a,off+b]); else { ponto.push([off+a,off+1440]); ponto.push([off,off+b]); } }   // divide no cruzamento da meia-noite
       if(r.punches.length===1) ponto.push([off+r.punches[0],off+r.punches[0]+8]);
       const idDiv=r.idDivergente||r.condutorDivergente; const idWho=r.idDivergente?(r.trimbleMot||''):(r.condutorDivergente?r.condutorPlan:'');
       r.mov.forEach(s=>{ const fora=(r.entrada!=null&&(s.ini<r.entrada-CFG.tol||s.fim>r.saida+CFG.tol)); mov.push({a:off+s.ini,b:off+s.fim,km:s.km,placa:s.placa,fora}); if(s.placa)placas.add(s.placa); km+=s.km||0; ident.push({a:off+s.ini,b:off+s.fim,ok:true,div:idDiv,who:idWho}); });
