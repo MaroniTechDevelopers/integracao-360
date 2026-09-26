@@ -1635,10 +1635,11 @@ function fichaMetrics(nome){
   const reco=recomendacao(tempo,mediaR,totAl,ddTotal);
   const risco=riscoComposto({ident:semel, media:mediaR, meta:metaFicha, ddReal:ddRealTotal}, alR);
   const condDiv=recs.filter(r=>r.idDivergente||r.condutorDivergente).length;
-  const diasComMov=recs.filter(r=>r.primMov!=null).length;
+  const diasTrab=new Set(recs.filter(r=>r.punches&&r.punches.length).map(r=>r.data)).size;      // dias com ponto
+  const diasComMov=new Set(recs.filter(r=>r.primMov!=null).map(r=>r.data)).size;                 // dias que dirigiu algum veículo
   const interjViol=recs.filter(r=>r.interjornada!=null && r.interjornada<CFG.interjornadaMin).length;
   const restMinF=recs.reduce((m,r)=>(r.interjornada!=null?(m==null?r.interjornada:Math.min(m,r.interjornada)):m),null);
-  return {nome,recs,d,adm,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,aderJornadaVal,op,placas,alR,totAl,tempo,kmR,litrosR,abF,mediaR,metaFicha,medaOk,reco,risco,condDiv,diasComMov,interjViol,restMinF};
+  return {nome,recs,d,adm,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,aderJornadaVal,op,placas,alR,totAl,tempo,kmR,litrosR,abF,mediaR,metaFicha,medaOk,reco,risco,condDiv,diasTrab,diasComMov,interjViol,restMinF};
 }
 // pontos críticos e positivos p/ o relatório executivo
 function fichaPontos(M){
@@ -1686,7 +1687,7 @@ function planoDeAcao(M){
 function renderFicha(){
   const nome=fichaAtual; if(!nome){ $('#fichaBox').innerHTML=''; return; }
   const M=fichaMetrics(nome);
-  const {recs,d,adm,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,aderJornadaVal,op,placas,alR,totAl,tempo,litrosR,abF,mediaR,metaFicha,medaOk,reco,interjViol,restMinF}=M;
+  const {recs,d,adm,porSemana,ddTotal,ddRealTotal,hexTotal,diasHex,semel,semelMot,aderJornadaVal,op,placas,alR,totAl,tempo,litrosR,abF,mediaR,metaFicha,medaOk,reco,diasTrab,diasComMov,interjViol,restMinF}=M;
   const fichaRisco=M.risco;
   const {weeks}=semanaAgg(RECORDS);
   const _dayF=dayFilter(); const _recsEvid=_dayF?recs.filter(r=>r.data===_dayF):recs;
@@ -1746,6 +1747,10 @@ function renderFicha(){
     <div class="card"><ul class="planolist">${PL.map(a=>`<li><span class="pa-ic">${a.ic}</span><div><b>${a.t}</b> — ${a.d}</div></li>`).join('')}</ul></div>
 
     <div class="grid kpis" style="margin-bottom:6px">
+      <div class="card kpi"><div class="accent" style="background:var(--track-ponto)"></div>
+        <div class="lab">Dias trabalhados</div><div class="val tnum">${diasTrab}</div><div class="sub">dias com ponto no período</div></div>
+      <div class="card kpi"><div class="accent" style="background:var(--track-mov)"></div>
+        <div class="lab">Dias com movimentação</div><div class="val tnum">${diasComMov}</div><div class="sub">dias que dirigiu algum veículo</div></div>
       <div class="card kpi"><div class="accent" style="background:${medaOk?'var(--good)':'var(--critical)'}"></div>
         <div class="lab">④ Média realizada</div><div class="val tnum">${mediaR!=null?mediaR.toFixed(2).replace('.',','):'—'}</div><div class="sub">${abF?'real (bomba)':(litrosR>0?'estim. Trimble':'—')} · meta ${metaFicha.toFixed(2).replace('.',',')}${mediaR!=null?(medaOk?' ✓':' ✗'):''}</div></div>
       <div class="card kpi"><div class="accent" style="background:${semel==null?'var(--muted)':(semel>=CFG.sem?'var(--good)':'var(--critical)')}"></div>
@@ -1858,6 +1863,8 @@ function exportFichaPDF(){
   const nf=v=>v==null?'—':v.toFixed(2).replace('.',',');
   const alto=(M.alR.niveis&&M.alR.niveis.ALTO)||0;
   const kpis=`<div class="kgrid p6">
+    ${pdfKpi('Dias trabalhados', String(M.diasTrab), 'dias com ponto no período', '#f5c800')}
+    ${pdfKpi('Dias com movimentação', String(M.diasComMov), 'dias que dirigiu algum veículo', '#3b82f6')}
     ${pdfKpi('④ Média realizada', (M.mediaR==null?'—':nf(M.mediaR)), 'meta '+nf(M.metaFicha)+(M.mediaR!=null?(M.medaOk?' ✓':' ✗'):''), M.medaOk?'#10b981':'#ef4444')}
     ${pdfKpi('① Aderência (câmera)', (M.semel==null?'—':M.semel+'<small>%</small>'), 'movimento do veículo identificado', M.semel==null?'#94a3b8':(M.semel>=CFG.sem?'#10b981':'#ef4444'))}
     ${pdfKpi('Aderência (motorista)', (M.semelMot==null?'—':M.semelMot+'<small>%</small>'), 'reconhecido como '+pdfEsc(firstName(nome)), M.semelMot==null?'#94a3b8':(M.semelMot>=CFG.sem?'#10b981':'#ef4444'))}
