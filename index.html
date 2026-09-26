@@ -126,6 +126,11 @@
   :root[data-theme="dark"] .filterbar input[type=date]{color-scheme:dark}
   .filterbar select:hover,.filterbar input[type=text]:hover,.filterbar input[type=date]:hover{border-color:var(--gold)}
   .filterbar select:focus,.filterbar input[type=text]:focus,.filterbar input[type=date]:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--ring)}
+  .filterbar .f{position:relative}
+  .filterbar .f label{padding-right:18px}
+  .filterbar .f .fclr{position:absolute;top:-1px;right:0;width:16px;height:16px;border:none;border-radius:50%;background:var(--surface-2);color:var(--muted);font-size:13px;line-height:1;cursor:pointer;padding:0;display:none;align-items:center;justify-content:center;box-shadow:var(--shadow-sm)}
+  .filterbar .f.has-val .fclr{display:inline-flex}
+  .filterbar .f .fclr:hover{background:var(--critical);color:#fff}
 
   /* ============ KPI ============ */
   .kpis{grid-template-columns:repeat(auto-fit,minmax(178px,1fr))}
@@ -411,11 +416,11 @@
   <!-- FILTER BAR (compartilhada) -->
   <div class="filterbar" id="filterbar">
     <div class="f"><label>Fechamento (16→15)</label><select id="fFecha"><option value="">Todos</option></select></div>
-    <div class="f"><label>Operação</label><select id="fOp"><option value="">Todas</option></select></div>
+    <div class="f"><label>Operação</label><input type="text" id="fOp" list="fOpList" placeholder="Digite a operação…" autocomplete="off"><datalist id="fOpList"></datalist></div>
     <div class="f"><label>Dia</label><select id="fDia"><option value="">Todos</option></select></div>
     <div class="f"><label>De (data)</label><input type="date" id="fDe"></div>
     <div class="f"><label>Até (data)</label><input type="date" id="fAte"></div>
-    <div class="f"><label>Motorista</label><select id="fMot"><option value="">Todos</option></select></div>
+    <div class="f"><label>Motorista</label><input type="text" id="fMot" list="fMotList" placeholder="Digite o nome…" autocomplete="off"><datalist id="fMotList"></datalist></div>
     <div class="f"><label>Situação</label><select id="fStatus">
       <option value="">Todas</option>
       <option value="critico">Prioridade</option>
@@ -1145,13 +1150,14 @@ function build(){
    ============================================================ */
 function filtered(){
   const fe=$('#fFecha').value, op=$('#fOp').value, dia=$('#fDia').value, de=$('#fDe').value, ate=$('#fAte').value, mot=$('#fMot').value, st=$('#fStatus').value, q=norm($('#fBusca').value);
+  const mn=mot?norm(mot):'';   // Motorista por substring (digitar parcial já filtra)
   return RECORDS.filter(r=>{
     if(fe){ const f=fechamento(r.data); if(!f||f.key!==fe) return false; }
     if(de && r.data<de) return false;               // intervalo de datas (independe do fechamento)
     if(ate && r.data>ate) return false;
     if(op && r.operacao!==op) return false;
     if(dia && r.data!==dia) return false;
-    if(mot && r.motoristaEscala!==mot) return false;
+    if(mn && !norm(r.motoristaEscala).includes(mn)) return false;
     if(st && r.sev!==st) return false;
     if(q && !(norm(r.motoristaEscala).includes(q)||norm(r.placa).includes(q)||norm(r.trimbleMot).includes(q))) return false;
     return true;
@@ -1161,7 +1167,7 @@ function fillFilters(){
   const ops=[...new Set(RECORDS.map(r=>r.operacao))].sort();
   const dias=[...new Set(RECORDS.map(r=>r.data))].sort().reverse();
   const mots=[...new Set(RECORDS.map(r=>r.motoristaEscala))].sort();
-  fillSel('#fOp',ops); fillSel('#fMot',mots);
+  fillList('#fOpList',ops); fillList('#fMotList',mots);   // Operação e Motorista viraram campo de digitar (com sugestões)
   fillSel('#fDia',dias,brDate);
   // fechamentos presentes (mais recente primeiro)
   const fmap=new Map(); RECORDS.forEach(r=>{ const f=fechamento(r.data); if(f&&!fmap.has(f.key)) fmap.set(f.key,f); });
@@ -1169,6 +1175,7 @@ function fillFilters(){
   const el=$('#fFecha'), cur=el.value; el.innerHTML='<option value="">Todos</option>'+fechas.map(f=>`<option value="${f.key}">${f.label}</option>`).join(''); if(fechas.some(f=>f.key===cur)) el.value=cur;
 }
 function fillSel(sel,arr,fmt){ const el=$(sel), cur=el.value; el.innerHTML='<option value="">'+el.options[0].text.replace(/\s*\(.*/,'')+'</option>'+arr.map(v=>`<option value="${v}">${fmt?fmt(v):v}</option>`).join(''); if(arr.includes(cur)) el.value=cur; }
+function fillList(id,arr){ const el=$(id); if(el) el.innerHTML=arr.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join(''); }
 
 /* ============================================================
    RENDER — KPIs
@@ -2044,6 +2051,7 @@ function renderTable(rows){
    RENDER GERAL
    ============================================================ */
 function renderAll(){
+  if(typeof updateFilterClears==='function') updateFilterClears();
   const rows=filtered();
   renderKpis(rows);
   renderSemana(rows);
@@ -3274,9 +3282,16 @@ applyDadosGate();
   } }catch(e){}
 })();
 // filtros
-['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus'].forEach(s=>$(s).addEventListener('change',renderAll));
-$('#fBusca').addEventListener('input',renderAll);
+['#fFecha','#fDia','#fDe','#fAte','#fStatus'].forEach(s=>$(s).addEventListener('change',renderAll));
+['#fBusca','#fOp','#fMot'].forEach(s=>$(s).addEventListener('input',renderAll));   // digitar já filtra
 $('#clearFilters').onclick=()=>{ ['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus','#fTipoDiv'].forEach(s=>{const el=$(s); if(el)el.value='';}); $('#fBusca').value=''; renderAll(); };
+// × p/ limpar cada filtro individualmente
+const FILTER_IDS=['#fFecha','#fOp','#fDia','#fDe','#fAte','#fMot','#fStatus','#fBusca'];
+function updateFilterClears(){ FILTER_IDS.forEach(s=>{ const el=$(s); if(!el)return; const f=el.closest('.f'); if(f) f.classList.toggle('has-val', !!el.value); }); }
+(function setupFilterClears(){ FILTER_IDS.forEach(s=>{ const el=$(s); if(!el)return; const f=el.closest('.f'); if(!f||f.querySelector('.fclr'))return;
+  const b=document.createElement('button'); b.className='fclr'; b.type='button'; b.textContent='×'; b.title='Limpar este filtro';
+  b.onclick=(e)=>{ e.preventDefault(); el.value=''; renderAll(); el.focus(); };
+  f.appendChild(b); }); updateFilterClears(); })();
 // ordenação tabela
 $$('#tbl thead th').forEach(th=>th.onclick=()=>{ const k=th.dataset.k; SORT.dir = (SORT.k===k)? -SORT.dir : (k==='_sev'?1:1); SORT.k=k; renderTable(filtered()); });
 $('#expCsv').onclick=exportCsv;
