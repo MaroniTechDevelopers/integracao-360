@@ -897,8 +897,12 @@ function admissaoDe(nome){ const nn=norm(nome);
   if(ADMISSAO && ADMISSAO[nn]) return ADMISSAO[nn];
   if(ADMISSAO_CPF && typeof NOME2CPF!=='undefined' && NOME2CPF){ const cpf=NOME2CPF[nn]; if(cpf && ADMISSAO_CPF[cpf]) return ADMISSAO_CPF[cpf]; }
   return (DRIVERS[nome]&&DRIVERS[nome].admissao)||''; }
+// MÉDIA DESLIGADA: a média medida da Trimble ainda não vem preenchida nos exports (coluna vazia).
+// Enquanto não tivermos a fonte assertiva, a média fica em branco ("—") no painel todo.
+// Para religar quando a Trimble corrigir o export, troque para false.
+const MEDIA_OFF = true;
 // média oficial do motorista: abastecimento real (bombas) > estimativa Trimble (km/litros) > cadastro demo
-function mediaDe(nome){ if(ABAST){ const a=ABAST[norm(nome)]; if(a&&a.media!=null) return a.media; }
+function mediaDe(nome){ if(MEDIA_OFF) return null; if(ABAST){ const a=ABAST[norm(nome)]; if(a&&a.media!=null) return a.media; }
   let km=0,l=0; for(const r of RECORDS){ if(r.motoristaEscala===nome){ km+=r.km||0; l+=r.litros||0; } } return l>0? km/l : (drv(nome).media!=null?drv(nome).media:null); }
 const NIVEL_DEF=[{k:'ALTO',lab:'Alto',ic:'🔴'},{k:'MEDIO',lab:'Médio',ic:'🟠'},{k:'BAIXO',lab:'Baixo',ic:'🟡'}];
 function tipoLabel(t){ return String(t||'').replace(/_/g,' ').toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase()); }
@@ -1186,7 +1190,8 @@ function renderKpis(rows){
   const movDays=rows.filter(r=>r.movimento.length>0).length;
   const cobPonto=movDays?Math.round((movDays-movSemPonto)/movDays*100):null;
   const motSet=[...new Set(rows.map(r=>r.motoristaEscala))];
-  const medFrota=(function(){ if(ABAST){ let km=0,l=0; motSet.forEach(m=>{ const a=ABAST[norm(m)]; if(a){km+=a.km;l+=a.litros;} }); if(l>0) return km/l; }
+  const medFrota=(function(){ if(MEDIA_OFF) return null;
+    if(ABAST){ let km=0,l=0; motSet.forEach(m=>{ const a=ABAST[norm(m)]; if(a){km+=a.km;l+=a.litros;} }); if(l>0) return km/l; }
     let km=0,l=0; rows.forEach(r=>{km+=r.km||0;l+=r.litros||0;}); if(l>0) return km/l;
     const a=motSet.map(m=>drv(m).media).filter(v=>v!=null); return a.length?a.reduce((x,y)=>x+y,0)/a.length:null; })();
   let alertKpi=null;
@@ -1208,7 +1213,7 @@ function renderKpis(rows){
     {lab:'Interjornada < 11h',val:interj,sub:motsInterj+' motorista(s) · descanso insuficiente',ac:interj>0?'var(--critical)':'var(--good)',tab:'diverg'},
     alertKpi
       ? {lab:'⚠ Alertas (câmera/telemetria)',val:alertKpi.tot.toLocaleString('pt-BR'),sub:(alertKpi.alto?alertKpi.alto+' motorista(s) c/ nível alto':alertKpi.nmot+' motorista(s) c/ alerta'),ac:'var(--s7)',tab:'linha'}
-      : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'plugar Marcante':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)',tab:'media'},
+      : {lab:'④ Média da frota',val:(medFrota==null?'—':medFrota.toFixed(2).replace('.',',')),sub:(medFrota==null?'aguardando média da Trimble':'meta '+CFG.meta.toFixed(2).replace('.',',')),ac:(medFrota!=null&&medFrota>=CFG.meta)?'var(--good)':'var(--muted)',tab:'media'},
     {lab:'Horas extras (&gt;7h20)',val:hDec(hex),sub:motsHex+' motorista(s) acima da jornada',ac:hex>0?'var(--warning)':'var(--muted)',tab:'tabela'},
   ];
   if(placOk!=null){ const placTot=placOk+placAcao; K.splice(1,0,
@@ -1252,7 +1257,7 @@ function semanaAgg(rows){
       m.recs.push(r);
       if(r.idDivergente) m.idDiv++; if(r.sev==='pendente') m.pend++; });
     const rng=activeRange();
-    Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=(ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media); m.op=op; m.meta=metaVeic(m.placa,op); m.alertas=d.alertas||{}; m.admissao=admissaoDe(m.nome);
+    Object.values(mots).forEach(m=>{ const d=drv(m.nome); const ab=ABAST&&ABAST[norm(m.nome)]; m.media=MEDIA_OFF?null:((ab&&ab.media!=null)?ab.media:(m.litros>0?(m.km/m.litros):d.media)); m.op=op; m.meta=metaVeic(m.placa,op); m.alertas=d.alertas||{}; m.admissao=admissaoDe(m.nome);
       m.semel=m.semelN?Math.round(m.semelSum/m.semelN):null; m.ident=aderRecs(m.recs);   // ponderado pelo tempo (min identificados ÷ total)
       m.aj=aderJornada(m.recs);   // aderência de jornada (score positivo)
       m.risco=riscoComposto(m, alertasResumo(m.nome, rng)); m.farolUlt=m.risco.cls; });
@@ -1288,7 +1293,7 @@ function capinha(m,weeks){
     </div>
     <div class="cap-metrics">
       <div class="cm"><span>Identif.</span><b class="${m.ident==null?'':(m.ident>=CFG.sem?'ok':'bad')}">${m.ident==null?'—':m.ident+'%'}</b></div>
-      <div class="cm"><span>Média</span><b class="${medaOk?'ok':'bad'}">${medaTxt}</b></div>
+      <div class="cm"><span>Média</span><b class="${m.media==null?'':(medaOk?'ok':'bad')}">${medaTxt}</b></div>
       <div class="cm"><span>Fora da jornada</span><b class="${m.ddReal>0?'bad':''}" title="horas de condução fora do horário do ponto${m.aj!=null?' · aderência de jornada '+m.aj+'%':''}">${m.ddReal>0?hDec(m.ddReal):'0h'}</b></div>
       <div class="cm"><span>Alertas</span><b class="${totAl>=5?'bad':''}">${totAl}</b></div>
     </div>
@@ -1629,7 +1634,7 @@ function fichaMetrics(nome){
   const adm=admissaoDe(nome); const tempo=tempoDeCasa(adm);
   const kmR=recs.reduce((a,r)=>a+(r.km||0),0), litrosR=recs.reduce((a,r)=>a+(r.litros||0),0);
   const abF=ABAST&&ABAST[norm(nome)];
-  const mediaR = (abF&&abF.media!=null)?abF.media:(litrosR>0?kmR/litrosR:d.media);   // abastecimento real > Trimble > demo
+  const mediaR = MEDIA_OFF ? null : ((abF&&abF.media!=null)?abF.media:(litrosR>0?kmR/litrosR:d.media));   // desligada até a média da Trimble vir preenchida
   const metaFicha = metaVeic(recs.length?(recs.find(r=>r.placa)||{}).placa:'', recs.length?recs[0].operacao:'');
   const medaOk=mediaR!=null&&mediaR>=metaFicha;
   const reco=recomendacao(tempo,mediaR,totAl,ddTotal);
@@ -1752,7 +1757,7 @@ function renderFicha(){
       <div class="card kpi"><div class="accent" style="background:var(--track-mov)"></div>
         <div class="lab">Dias com movimentação</div><div class="val tnum">${diasComMov}</div><div class="sub">dias que dirigiu algum veículo</div></div>
       <div class="card kpi"><div class="accent" style="background:${medaOk?'var(--good)':'var(--critical)'}"></div>
-        <div class="lab">④ Média realizada</div><div class="val tnum">${mediaR!=null?mediaR.toFixed(2).replace('.',','):'—'}</div><div class="sub">${abF?'real (bomba)':(litrosR>0?'estim. Trimble':'—')} · meta ${metaFicha.toFixed(2).replace('.',',')}${mediaR!=null?(medaOk?' ✓':' ✗'):''}</div></div>
+        <div class="lab">④ Média realizada</div><div class="val tnum">${mediaR!=null?mediaR.toFixed(2).replace('.',','):'—'}</div><div class="sub">${mediaR==null?'aguardando média da Trimble':((abF?'real (bomba)':(litrosR>0?'estim. Trimble':'—'))+' · meta '+metaFicha.toFixed(2).replace('.',',')+(medaOk?' ✓':' ✗'))}</div></div>
       <div class="card kpi"><div class="accent" style="background:${semel==null?'var(--muted)':(semel>=CFG.sem?'var(--good)':'var(--critical)')}"></div>
         <div class="lab">① Aderência (câmera)</div><div class="val tnum">${semel==null?'—':semel+'<small>%</small>'}</div><div class="sub">movimento do veículo identificado</div></div>
       <div class="card kpi"><div class="accent" style="background:${semelMot==null?'var(--muted)':(semelMot>=CFG.sem?'var(--good)':'var(--critical)')}"></div>
@@ -1865,7 +1870,7 @@ function exportFichaPDF(){
   const kpis=`<div class="kgrid p6">
     ${pdfKpi('Dias trabalhados', String(M.diasTrab), 'dias com ponto no período', '#f5c800')}
     ${pdfKpi('Dias com movimentação', String(M.diasComMov), 'dias que dirigiu algum veículo', '#3b82f6')}
-    ${pdfKpi('④ Média realizada', (M.mediaR==null?'—':nf(M.mediaR)), 'meta '+nf(M.metaFicha)+(M.mediaR!=null?(M.medaOk?' ✓':' ✗'):''), M.medaOk?'#10b981':'#ef4444')}
+    ${pdfKpi('④ Média realizada', (M.mediaR==null?'—':nf(M.mediaR)), (M.mediaR==null?'aguardando média da Trimble':('meta '+nf(M.metaFicha)+(M.medaOk?' ✓':' ✗'))), M.mediaR==null?'#94a3b8':(M.medaOk?'#10b981':'#ef4444'))}
     ${pdfKpi('① Aderência (câmera)', (M.semel==null?'—':M.semel+'<small>%</small>'), 'movimento do veículo identificado', M.semel==null?'#94a3b8':(M.semel>=CFG.sem?'#10b981':'#ef4444'))}
     ${pdfKpi('Aderência (motorista)', (M.semelMot==null?'—':M.semelMot+'<small>%</small>'), 'reconhecido como '+pdfEsc(firstName(nome)), M.semelMot==null?'#94a3b8':(M.semelMot>=CFG.sem?'#10b981':'#ef4444'))}
     ${pdfKpi('③ Aderência de jornada', (M.aderJornadaVal==null?'—':M.aderJornadaVal+'<small>%</small>'), hDec(M.ddRealTotal)+' fora da jornada', M.aderJornadaVal==null?'#94a3b8':(M.aderJornadaVal>=90?'#10b981':M.aderJornadaVal>=70?'#f59e0b':'#ef4444'))}
@@ -2281,6 +2286,7 @@ function mediaAgg(rows){
 }
 function renderMedia(rows){
   const kbox=$('#mediaKpis'), box=$('#mediaBox');
+  if(MEDIA_OFF){ if(kbox) kbox.innerHTML=''; if(box) box.innerHTML='<div class="card" style="padding:30px 24px;text-align:center"><div style="font-size:32px">⛽</div><h3 style="margin:10px 0 6px;font-size:16px">Média em integração direta com a Trimble</h3><p style="color:var(--muted);font-size:13px;max-width:560px;margin:6px auto;line-height:1.5">A média de consumo passará a vir <b>medida diretamente da telemetria Trimble</b>, por veículo. Enquanto a fonte não chega preenchida no relatório, este indicador fica <b>propositalmente em branco</b> — para não exibir número que ainda não foi validado.</p></div>'; return; }
   const list=mediaAgg(rows); const temAb=ABAST&&list.some(m=>m.mediaA!=null);
   const abaixo=list.filter(m=>m.oficial<m.meta).length;
   // frota (oficial) e conciliação
